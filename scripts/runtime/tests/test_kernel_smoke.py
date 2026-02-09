@@ -32,8 +32,16 @@ class TestKernelBasic(unittest.TestCase):
         self.assertEqual(self.kernel.current_state, State.IDLE)
 
     def test_dispatch_start_event(self):
-        """派发 START 事件"""
+        """派发 START 事件 -> UNDERSTAND"""
         result = self.kernel.dispatch(Event.START)
+        self.assertTrue(result.success)
+        self.assertEqual(result.from_state, State.IDLE)
+        self.assertEqual(result.to_state, State.UNDERSTAND)
+        self.assertEqual(self.kernel.current_state, State.UNDERSTAND)
+
+    def test_skip_understand(self):
+        """派发 SKIP_UNDERSTAND 事件跳过理解确认"""
+        result = self.kernel.dispatch(Event.SKIP_UNDERSTAND)
         self.assertTrue(result.success)
         self.assertEqual(result.from_state, State.IDLE)
         self.assertEqual(result.to_state, State.INITIALIZE)
@@ -55,6 +63,7 @@ class TestKernelBasic(unittest.TestCase):
         """获取有效事件列表"""
         events = self.kernel.get_valid_events()
         self.assertIn(Event.START, events)
+        self.assertIn(Event.SKIP_UNDERSTAND, events)
         self.assertIn(Event.ERROR_OCCURRED, events)
 
     def test_get_status(self):
@@ -78,9 +87,9 @@ class TestKernelWorkflow(unittest.TestCase):
         shutil.rmtree(self.temp_dir)
 
     def test_basic_workflow(self):
-        """基础工作流：START -> INIT_DONE -> ANALYZE_DONE"""
-        # START
-        result = self.kernel.dispatch(Event.START)
+        """基础工作流：SKIP_UNDERSTAND -> INIT_DONE -> ANALYZE_DONE"""
+        # SKIP_UNDERSTAND (跳过理解确认，直接到 INITIALIZE)
+        result = self.kernel.dispatch(Event.SKIP_UNDERSTAND)
         self.assertTrue(result.success)
         self.assertEqual(self.kernel.current_state, State.INITIALIZE)
 
@@ -94,10 +103,27 @@ class TestKernelWorkflow(unittest.TestCase):
         self.assertTrue(result.success)
         self.assertEqual(self.kernel.current_state, State.DECOMPOSE)
 
+    def test_understand_workflow(self):
+        """理解确认流程：START -> CONFIRM -> INIT_DONE"""
+        # START -> UNDERSTAND
+        result = self.kernel.dispatch(Event.START)
+        self.assertTrue(result.success)
+        self.assertEqual(self.kernel.current_state, State.UNDERSTAND)
+
+        # CONFIRM -> INITIALIZE
+        result = self.kernel.dispatch(Event.CONFIRM)
+        self.assertTrue(result.success)
+        self.assertEqual(self.kernel.current_state, State.INITIALIZE)
+
+        # INIT_DONE
+        result = self.kernel.dispatch(Event.INIT_DONE)
+        self.assertTrue(result.success)
+        self.assertEqual(self.kernel.current_state, State.ANALYZE)
+
     def test_pause_resume(self):
         """暂停和恢复"""
-        # 进入 EXECUTE 状态
-        self.kernel.dispatch(Event.START)
+        # 进入 EXECUTE 状态 (使用 SKIP_UNDERSTAND 跳过理解确认)
+        self.kernel.dispatch(Event.SKIP_UNDERSTAND)
         self.kernel.dispatch(Event.INIT_DONE)
         self.kernel.dispatch(Event.ANALYZE_DONE)
         self.kernel.dispatch(Event.DECOMPOSE_DONE)
@@ -115,7 +141,7 @@ class TestKernelWorkflow(unittest.TestCase):
 
     def test_cancel_workflow(self):
         """取消工作流"""
-        self.kernel.dispatch(Event.START)
+        self.kernel.dispatch(Event.SKIP_UNDERSTAND)
         self.kernel.dispatch(Event.INIT_DONE)
 
         result = self.kernel.dispatch(Event.CANCEL)
@@ -136,9 +162,9 @@ class TestKernelPersistence(unittest.TestCase):
 
     def test_save_and_load_state(self):
         """保存和加载状态"""
-        # 创建内核并推进状态
+        # 创建内核并推进状态 (使用 SKIP_UNDERSTAND)
         kernel1 = FusionKernel(fusion_dir=str(self.fusion_dir))
-        kernel1.dispatch(Event.START)
+        kernel1.dispatch(Event.SKIP_UNDERSTAND)
         kernel1.dispatch(Event.INIT_DONE)
         self.assertEqual(kernel1.current_state, State.ANALYZE)
 
@@ -151,7 +177,7 @@ class TestKernelPersistence(unittest.TestCase):
     def test_sessions_json_updated(self):
         """sessions.json 被正确更新"""
         kernel = FusionKernel(fusion_dir=str(self.fusion_dir))
-        kernel.dispatch(Event.START)
+        kernel.dispatch(Event.SKIP_UNDERSTAND)
 
         # 检查文件
         sessions_file = self.fusion_dir / "sessions.json"
@@ -167,7 +193,7 @@ class TestKernelPersistence(unittest.TestCase):
     def test_events_logged(self):
         """事件被记录到日志"""
         kernel = FusionKernel(fusion_dir=str(self.fusion_dir))
-        kernel.dispatch(Event.START)
+        kernel.dispatch(Event.SKIP_UNDERSTAND)
         kernel.dispatch(Event.INIT_DONE)
 
         # 检查事件日志
@@ -180,7 +206,7 @@ class TestKernelPersistence(unittest.TestCase):
         self.assertEqual(len(lines), 2)
 
         event1 = json.loads(lines[0])
-        self.assertEqual(event1["type"], "START")
+        self.assertEqual(event1["type"], "SKIP_UNDERSTAND")
         self.assertEqual(event1["from_state"], "IDLE")
         self.assertEqual(event1["to_state"], "INITIALIZE")
 
@@ -204,7 +230,7 @@ class TestKernelEventListener(unittest.TestCase):
             self.events_received.append(data)
 
         self.kernel.on("state_changed", listener)
-        self.kernel.dispatch(Event.START)
+        self.kernel.dispatch(Event.SKIP_UNDERSTAND)
 
         self.assertEqual(len(self.events_received), 1)
         self.assertEqual(self.events_received[0]["from"], "IDLE")

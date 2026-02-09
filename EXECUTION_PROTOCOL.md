@@ -44,6 +44,134 @@ EOF
 
 ---
 
+## Phase 0: UNDERSTAND (理解确认)
+
+**核心理念**：先理解后执行，确保 AI 正确理解用户意图再开始工作。
+
+### 0.1 检查跳过标志
+
+```python
+# 伪代码
+if "--force" in args or "--yolo" in args:
+    log("⚠️ 跳过理解确认（--force）")
+    goto Phase_1_INITIALIZE
+```
+
+### 0.2 静默扫描项目
+
+**目的**：在不打扰用户的情况下收集上下文
+
+```python
+context = {
+    "tech_stack": detect_tech_stack(),      # package.json/go.mod/pyproject.toml
+    "test_framework": detect_test_framework(),
+    "project_structure": scan_directories(), # src/, tests/, docs/
+    "related_files": ace_tool_search(goal),  # 语义搜索
+    "recent_changes": git_log_5()            # 最近提交
+}
+```
+
+**技术栈检测规则**：
+
+| 文件 | 技术栈 | 测试框架 |
+|------|--------|----------|
+| `package.json` | Node.js | jest/mocha/vitest |
+| `go.mod` | Go | go test |
+| `pyproject.toml` | Python | pytest |
+| `Cargo.toml` | Rust | cargo test |
+
+### 0.3 目标评分
+
+使用 `prompts/understand.md` 中的评分 prompt：
+
+```
+评分维度（总分 0-10）：
+- 目标明确性 (0-3)
+- 预期结果 (0-3)
+- 边界范围 (0-2)
+- 约束条件 (0-2)
+```
+
+**决策逻辑**：
+
+| 评分 | 行为 |
+|------|------|
+| ≥ 7 | 直接展示理解摘要 |
+| 5-6 | 追问 1 轮后展示 |
+| < 5 | 追问 2 轮，仍不足则建议重述 |
+
+### 0.4 追问流程（如需要）
+
+**关键原则**：
+- 一次只问一个问题
+- 优先多选题
+- 标注推荐选项（基于上下文推断）
+- 最多 2 轮
+
+**示例**：
+
+```
+● 认证方式？
+  [1] JWT (推荐 - 项目已有 jsonwebtoken 依赖)
+  [2] Session
+  [3] OAuth2
+  [4] 其他（请说明）
+```
+
+### 0.5 展示理解摘要
+
+```markdown
+## 📋 Fusion 理解确认
+
+**目标**：实现用户认证系统
+
+**上下文**：
+• 技术栈：Express + TypeScript + PostgreSQL
+• 测试框架：Jest
+• 相关文件：src/middleware/auth.ts
+
+**计划范围**：
+• 用户模型 + 注册/登录 API + JWT 中间件
+• 预计 5 个任务，约 20-30 分钟
+
+**假设** ⚠️：
+• 认证方式：JWT（如需 Session 请说明）
+• 密码哈希：bcrypt
+
+确认开始？(ok/修改/取消)
+```
+
+### 0.6 用户响应处理
+
+| 响应 | 行为 |
+|------|------|
+| `ok` / `确认` / `y` | 进入 Phase 1 INITIALIZE |
+| 包含修改内容 | 更新理解，重新展示摘要 |
+| `取消` / `cancel` | 退出工作流 |
+
+### 0.7 记录理解结果
+
+将确认的理解写入 `.fusion/findings.md`：
+
+```markdown
+## UNDERSTAND Phase
+
+**原始目标**: <用户输入>
+**确认时间**: <timestamp>
+**评分**: <total>/10
+
+### 上下文
+<context summary>
+
+### 假设
+<assumptions>
+
+### 用户补充
+<answers if any>
+```
+
+---
+
 ## Phase 1: INITIALIZE (初始化)
 
 ### 1.1 创建工作目录

@@ -33,9 +33,9 @@ class TestResumeFromSnapshot(unittest.TestCase):
 
     def test_resume_basic_workflow(self):
         """基础恢复：推进到 EXECUTE，重建后状态正确"""
-        # 第一个 kernel 实例推进状态
+        # 第一个 kernel 实例推进状态 (使用 SKIP_UNDERSTAND 跳过理解确认)
         k1 = FusionKernel(fusion_dir=str(self.fusion_dir))
-        k1.dispatch(Event.START)
+        k1.dispatch(Event.SKIP_UNDERSTAND)
         k1.dispatch(Event.INIT_DONE)
         k1.dispatch(Event.ANALYZE_DONE)
         k1.dispatch(Event.DECOMPOSE_DONE)
@@ -54,8 +54,8 @@ class TestResumeFromSnapshot(unittest.TestCase):
     def test_resume_preserves_event_counter(self):
         """恢复后事件计数器连续"""
         k1 = FusionKernel(fusion_dir=str(self.fusion_dir))
-        k1.dispatch(Event.START)       # evt_000001
-        k1.dispatch(Event.INIT_DONE)   # evt_000002
+        k1.dispatch(Event.SKIP_UNDERSTAND)  # evt_000001
+        k1.dispatch(Event.INIT_DONE)        # evt_000002
 
         # 恢复
         k2 = FusionKernel(fusion_dir=str(self.fusion_dir))
@@ -68,7 +68,7 @@ class TestResumeFromSnapshot(unittest.TestCase):
     def test_resume_after_pause(self):
         """暂停→崩溃→恢复→继续"""
         k1 = FusionKernel(fusion_dir=str(self.fusion_dir))
-        k1.dispatch(Event.START)
+        k1.dispatch(Event.SKIP_UNDERSTAND)
         k1.dispatch(Event.INIT_DONE)
         k1.dispatch(Event.ANALYZE_DONE)
         k1.dispatch(Event.DECOMPOSE_DONE)
@@ -100,7 +100,7 @@ class TestResumeFromEvents(unittest.TestCase):
     def test_full_replay_matches_snapshot(self):
         """事件流重放的结果与快照一致"""
         k1 = FusionKernel(fusion_dir=str(self.fusion_dir))
-        k1.dispatch(Event.START)
+        k1.dispatch(Event.SKIP_UNDERSTAND)
         k1.dispatch(Event.INIT_DONE)
         k1.dispatch(Event.ANALYZE_DONE)
         k1.dispatch(Event.DECOMPOSE_DONE)
@@ -118,7 +118,7 @@ class TestResumeFromEvents(unittest.TestCase):
     def test_replay_after_snapshot_corruption(self):
         """快照损坏时，事件流重放可以恢复"""
         k1 = FusionKernel(fusion_dir=str(self.fusion_dir))
-        k1.dispatch(Event.START)
+        k1.dispatch(Event.SKIP_UNDERSTAND)
         k1.dispatch(Event.INIT_DONE)
         k1.dispatch(Event.ANALYZE_DONE)
 
@@ -140,9 +140,9 @@ class TestResumeFromEvents(unittest.TestCase):
     def test_replay_from_midpoint(self):
         """增量恢复：从指定事件之后开始"""
         k1 = FusionKernel(fusion_dir=str(self.fusion_dir))
-        k1.dispatch(Event.START)       # evt_000001
-        k1.dispatch(Event.INIT_DONE)   # evt_000002
-        k1.dispatch(Event.ANALYZE_DONE)  # evt_000003
+        k1.dispatch(Event.SKIP_UNDERSTAND)  # evt_000001
+        k1.dispatch(Event.INIT_DONE)        # evt_000002
+        k1.dispatch(Event.ANALYZE_DONE)     # evt_000003
 
         # 从 evt_000001 之后增量恢复
         k2 = FusionKernel(fusion_dir=str(self.fusion_dir))
@@ -184,7 +184,7 @@ class TestIdempotentDispatch(unittest.TestCase):
     def test_event_count_after_idempotent_writes(self):
         """幂等跳过不增加事件计数"""
         k = FusionKernel(fusion_dir=str(self.fusion_dir))
-        k.dispatch(Event.START)
+        k.dispatch(Event.SKIP_UNDERSTAND)
         k.dispatch(Event.INIT_DONE)
 
         initial_count = k.session_store.get_event_count()
@@ -205,7 +205,7 @@ class TestFaultInjection(unittest.TestCase):
     def test_missing_sessions_json(self):
         """sessions.json 不存在时的恢复"""
         k1 = FusionKernel(fusion_dir=str(self.fusion_dir))
-        k1.dispatch(Event.START)
+        k1.dispatch(Event.SKIP_UNDERSTAND)
         k1.dispatch(Event.INIT_DONE)
 
         # 删除 sessions.json
@@ -225,7 +225,7 @@ class TestFaultInjection(unittest.TestCase):
     def test_missing_events_jsonl(self):
         """events.jsonl 不存在时的处理"""
         k1 = FusionKernel(fusion_dir=str(self.fusion_dir))
-        k1.dispatch(Event.START)
+        k1.dispatch(Event.SKIP_UNDERSTAND)
 
         # 删除 events.jsonl
         events_file = self.fusion_dir / "events.jsonl"
@@ -244,7 +244,7 @@ class TestFaultInjection(unittest.TestCase):
     def test_partial_events_file(self):
         """events.jsonl 中有损坏行但不影响整体恢复"""
         k1 = FusionKernel(fusion_dir=str(self.fusion_dir))
-        k1.dispatch(Event.START)
+        k1.dispatch(Event.SKIP_UNDERSTAND)
         k1.dispatch(Event.INIT_DONE)
 
         # 在事件文件中插入损坏行
@@ -289,7 +289,7 @@ class TestEventBusIntegration(unittest.TestCase):
         received = []
 
         k.on("state_changed", lambda data: received.append(data))
-        k.dispatch(Event.START)
+        k.dispatch(Event.SKIP_UNDERSTAND)
 
         self.assertEqual(len(received), 1)
         self.assertEqual(received[0]["from"], "IDLE")
@@ -303,7 +303,7 @@ class TestEventBusIntegration(unittest.TestCase):
             raise RuntimeError("boom")
 
         k.on("state_changed", bad_listener)
-        result = k.dispatch(Event.START)
+        result = k.dispatch(Event.SKIP_UNDERSTAND)
 
         # dispatch 仍然成功
         self.assertTrue(result.success)
@@ -317,7 +317,7 @@ class TestEventBusIntegration(unittest.TestCase):
         # 直接用 EventBus API（不走兼容层）
         k.event_bus.on("*", lambda et, data: all_events.append(et))
 
-        k.dispatch(Event.START)
+        k.dispatch(Event.SKIP_UNDERSTAND)
         k.dispatch(Event.INIT_DONE)
 
         self.assertIn("state_changed", all_events)
@@ -338,7 +338,7 @@ class TestFullWorkflowReplay(unittest.TestCase):
     def test_full_workflow_interrupt_and_resume(self):
         """完整工作流在任意点中断都能恢复"""
         events_sequence = [
-            Event.START,
+            Event.SKIP_UNDERSTAND,
             Event.INIT_DONE,
             Event.ANALYZE_DONE,
             Event.DECOMPOSE_DONE,
@@ -378,7 +378,7 @@ class TestFullWorkflowReplay(unittest.TestCase):
     def test_error_recovery_and_resume(self):
         """错误→恢复→继续的完整流程"""
         k1 = FusionKernel(fusion_dir=str(self.fusion_dir))
-        k1.dispatch(Event.START)
+        k1.dispatch(Event.SKIP_UNDERSTAND)
         k1.dispatch(Event.INIT_DONE)
         k1.dispatch(Event.ANALYZE_DONE)
         k1.dispatch(Event.DECOMPOSE_DONE)

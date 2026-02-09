@@ -11,8 +11,9 @@ from typing import Optional, Callable, List, Dict, Any
 
 class State(Enum):
     """Fusion 工作流状态"""
-    # 主流程状态 (对应 8 阶段)
+    # 主流程状态 (对应 9 阶段)
     IDLE = auto()           # 空闲/未初始化
+    UNDERSTAND = auto()     # 理解确认 (Phase 0)
     INITIALIZE = auto()     # 初始化工作流
     ANALYZE = auto()        # 分析需求和代码库
     DECOMPOSE = auto()      # 任务分解
@@ -36,8 +37,11 @@ class Event(Enum):
     PAUSE = auto()          # /fusion pause
     RESUME = auto()         # /fusion resume
     CANCEL = auto()         # /fusion cancel
+    CONFIRM = auto()        # 用户确认（UNDERSTAND 阶段）
+    SKIP_UNDERSTAND = auto() # --force 跳过理解确认
 
     # 阶段完成事件
+    UNDERSTAND_DONE = auto() # 理解确认完成
     INIT_DONE = auto()      # 初始化完成
     ANALYZE_DONE = auto()   # 分析完成
     DECOMPOSE_DONE = auto() # 分解完成
@@ -107,9 +111,20 @@ class StateMachine:
     def _register_transitions(self):
         """注册所有转移规则"""
         # ============ 正常流程 ============
-        self._add(State.IDLE, Event.START, State.INITIALIZE,
-                  description="启动工作流")
+        # Phase 0: UNDERSTAND
+        self._add(State.IDLE, Event.START, State.UNDERSTAND,
+                  description="启动工作流，进入理解确认阶段")
 
+        self._add(State.IDLE, Event.SKIP_UNDERSTAND, State.INITIALIZE,
+                  description="跳过理解确认（--force）")
+
+        self._add(State.UNDERSTAND, Event.CONFIRM, State.INITIALIZE,
+                  description="用户确认理解，进入初始化")
+
+        self._add(State.UNDERSTAND, Event.UNDERSTAND_DONE, State.INITIALIZE,
+                  description="理解确认完成，进入初始化")
+
+        # Phase 1-8: 原有流程
         self._add(State.INITIALIZE, Event.INIT_DONE, State.ANALYZE,
                   description="初始化完成，进入分析阶段")
 
@@ -152,7 +167,7 @@ class StateMachine:
         # ============ 暂停/恢复 ============
         # 可暂停的状态
         pausable_states = [
-            State.ANALYZE, State.DECOMPOSE, State.EXECUTE,
+            State.UNDERSTAND, State.ANALYZE, State.DECOMPOSE, State.EXECUTE,
             State.VERIFY, State.REVIEW
         ]
         for state in pausable_states:
@@ -164,7 +179,7 @@ class StateMachine:
 
         # ============ 取消 (从任何活跃状态) ============
         active_states = [
-            State.INITIALIZE, State.ANALYZE, State.DECOMPOSE,
+            State.UNDERSTAND, State.INITIALIZE, State.ANALYZE, State.DECOMPOSE,
             State.EXECUTE, State.VERIFY, State.REVIEW, State.COMMIT,
             State.DELIVER, State.PAUSED
         ]
@@ -175,9 +190,9 @@ class StateMachine:
         # ============ 错误处理 ============
         # 从任何非终态进入错误状态
         non_terminal_states = [
-            State.IDLE, State.INITIALIZE, State.ANALYZE, State.DECOMPOSE,
-            State.EXECUTE, State.VERIFY, State.REVIEW, State.COMMIT,
-            State.DELIVER, State.PAUSED
+            State.IDLE, State.UNDERSTAND, State.INITIALIZE, State.ANALYZE,
+            State.DECOMPOSE, State.EXECUTE, State.VERIFY, State.REVIEW,
+            State.COMMIT, State.DELIVER, State.PAUSED
         ]
         for state in non_terminal_states:
             self._add(state, Event.ERROR_OCCURRED, State.ERROR,
@@ -290,6 +305,7 @@ class StateMachine:
 # 状态到 sessions.json 的映射
 STATE_TO_PHASE: Dict[State, str] = {
     State.IDLE: "IDLE",
+    State.UNDERSTAND: "UNDERSTAND",
     State.INITIALIZE: "INITIALIZE",
     State.ANALYZE: "ANALYZE",
     State.DECOMPOSE: "DECOMPOSE",

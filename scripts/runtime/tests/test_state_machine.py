@@ -69,12 +69,28 @@ class TestStateMachine(unittest.TestCase):
         self.assertGreater(count, 20)  # 至少有 20+ 条转移规则
 
     def test_valid_start_transition(self):
-        """IDLE + START -> INITIALIZE"""
+        """IDLE + START -> UNDERSTAND (Phase 0)"""
         can = self.sm.can_transition(State.IDLE, Event.START)
         self.assertTrue(can)
 
         t = self.sm.find_transition(State.IDLE, Event.START)
         self.assertIsNotNone(t)
+        self.assertEqual(t.to_state, State.UNDERSTAND)
+
+    def test_understand_to_initialize(self):
+        """UNDERSTAND + CONFIRM -> INITIALIZE"""
+        can = self.sm.can_transition(State.UNDERSTAND, Event.CONFIRM)
+        self.assertTrue(can)
+
+        t = self.sm.find_transition(State.UNDERSTAND, Event.CONFIRM)
+        self.assertEqual(t.to_state, State.INITIALIZE)
+
+    def test_skip_understand(self):
+        """IDLE + SKIP_UNDERSTAND -> INITIALIZE (--force)"""
+        can = self.sm.can_transition(State.IDLE, Event.SKIP_UNDERSTAND)
+        self.assertTrue(can)
+
+        t = self.sm.find_transition(State.IDLE, Event.SKIP_UNDERSTAND)
         self.assertEqual(t.to_state, State.INITIALIZE)
 
     def test_valid_init_done_transition(self):
