@@ -69,9 +69,9 @@ STATUS=$(json_get "$FUSION_DIR/sessions.json" "status")
 
 # --- Active workflow: build context summary ---
 
-# Read goal (truncate to 60 chars for compact display)
+# Read goal (truncate to 60 chars, strip control chars for safe display)
 GOAL=$(json_get "$FUSION_DIR/sessions.json" "goal")
-GOAL=$(printf '%.60s' "$GOAL")
+GOAL=$(printf '%.60s' "$GOAL" | tr -d '"\\\t\n\r')
 
 # Read current phase
 PHASE=$(json_get "$FUSION_DIR/sessions.json" "current_phase")

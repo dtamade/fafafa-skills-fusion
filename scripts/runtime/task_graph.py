@@ -294,8 +294,8 @@ class TaskGraph:
             r"###\s+Task\s+(\d+):\s+(.+)\s+\[(PENDING|IN_PROGRESS|COMPLETED|FAILED)\]\s*$"
         )
         # 匹配属性行
-        type_pattern = re.compile(r"-\s+Type:\s*(.+)$")
-        backend_pattern = re.compile(r"-\s+Backend:\s*(.+)$")
+        type_pattern = re.compile(r"-\s+Type:\s*([a-zA-Z_]+)\s*$")
+        backend_pattern = re.compile(r"-\s+Backend:\s*([a-zA-Z_]+)\s*$")
         dep_pattern = re.compile(r"-\s+Dependencies:\s*\[([^\]]*)\]")
         writeset_pattern = re.compile(r"-\s+Writeset:\s*\[([^\]]*)\]")
         cost_pattern = re.compile(r"-\s+CostBudget:\s*(\d+)")

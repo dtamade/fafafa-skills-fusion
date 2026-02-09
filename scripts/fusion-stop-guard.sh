@@ -205,6 +205,10 @@ build_continuation_prompt() {
     local remaining="$4"
     local block_count="$5"
 
+    # Sanitize user-sourced data to prevent JSON injection in sed fallback path
+    goal=$(printf '%s' "$goal" | tr -d '"\\\t' | tr '\n' ' ')
+    next_task=$(printf '%s' "$next_task" | tr -d '"\\\t' | tr '\n' ' ')
+
     cat << EOF
 Continue executing the Fusion workflow.
 
@@ -331,9 +335,10 @@ main() {
         esac
     fi
 
-    # Get goal for context
+    # Get goal for context (sanitize to prevent JSON injection in sed fallback)
     local goal
     goal=$(json_get "$FUSION_DIR/sessions.json" "goal")
+    goal=$(printf '%s' "$goal" | tr -d '"\\\t' | tr '\n' ' ')
 
     # IMPORTANT: If task_plan.md doesn't exist but status is in_progress,
     # check the phase to decide behavior
@@ -401,9 +406,10 @@ main() {
         fi
     fi
 
-    # Get next task for context (needed for guardian)
+    # Get next task for context (sanitize to prevent JSON injection in sed fallback)
     local next_task
     next_task=$(grep -B1 "\[PENDING\]\|\[IN_PROGRESS\]" "$FUSION_DIR/task_plan.md" 2>/dev/null | grep "### Task" | head -1 | sed 's/### Task [0-9]*: //' | sed 's/ \[.*//' || echo "unknown")
+    next_task=$(printf '%s' "$next_task" | tr -d '"\\\t' | tr '\n' ' ')
 
     # LoopGuardian: Intelligent anti-deadloop protection
     if [ "$GUARDIAN_ENABLED" = true ]; then
