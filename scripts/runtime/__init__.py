@@ -10,6 +10,16 @@ from .state_machine import (
     state_to_phase,
 )
 
+from .event_bus import (
+    EventBus,
+    Subscription,
+)
+
+from .session_store import (
+    SessionStore,
+    StoredEvent,
+)
+
 from .kernel import (
     FusionKernel,
     KernelConfig,
@@ -27,6 +37,12 @@ __all__ = [
     "StateMachineContext",
     "phase_to_state",
     "state_to_phase",
+    # Event Bus
+    "EventBus",
+    "Subscription",
+    # Session Store
+    "SessionStore",
+    "StoredEvent",
     # Kernel
     "FusionKernel",
     "KernelConfig",
