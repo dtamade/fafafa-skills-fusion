@@ -113,6 +113,19 @@ class TestTaskGraphValidation(unittest.TestCase):
         self.assertTrue(any("Circular dependency" in e for e in errors))
 
 
+    def test_duplicate_dependency(self):
+        """重复依赖应当被去重，不影响拓扑排序"""
+        graph = TaskGraph([
+            TaskNode(task_id="1", name="A"),
+            TaskNode(task_id="2", name="B", dependencies=["1", "1"]),
+        ])
+        self.assertEqual(graph.validate(), [])
+        batches = graph.topological_sort()
+        self.assertEqual(len(batches), 2)
+        self.assertEqual(batches[0].task_ids, ["1"])
+        self.assertEqual(batches[1].task_ids, ["2"])
+
+
 class TestTopologicalSort(unittest.TestCase):
     """拓扑排序与批次产出"""
 

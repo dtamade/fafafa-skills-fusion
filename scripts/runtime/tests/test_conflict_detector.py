@@ -132,6 +132,16 @@ class TestCheck(unittest.TestCase):
         self.assertEqual(result.safe_tasks, ["1", "2", "3"])
         self.assertEqual(result.deferred_tasks, [])
 
+    def test_numeric_id_sort_order(self):
+        """数字 ID 按数值排序（2 < 10），不按字符串排序"""
+        result = self.detector.check([
+            TaskNode(task_id="10", name="T10", writeset=["x.py"]),
+            TaskNode(task_id="2", name="T2", writeset=["x.py"]),
+        ])
+        # 数值排序: 2 < 10，所以 task 2 安全，task 10 被推迟
+        self.assertEqual(result.safe_tasks, ["2"])
+        self.assertEqual(result.deferred_tasks, ["10"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -14,6 +14,14 @@ from typing import List, Optional, Dict, Set, Tuple
 # ── 数据结构 ─────────────────────────────────────
 
 
+def _task_sort_key(task_id: str):
+    """排序键：纯数字 ID 按数值排序，否则按字符串排序"""
+    try:
+        return (0, int(task_id), "")
+    except ValueError:
+        return (1, 0, task_id)
+
+
 @dataclass
 class TaskNode:
     """DAG 中的任务节点"""
@@ -84,6 +92,25 @@ class TaskGraph:
         if node:
             node.status = "IN_PROGRESS"
 
+    def _unique_deps(self, node: TaskNode) -> Set[str]:
+        """获取节点的去重依赖集合（防御重复声明）"""
+        return set(node.dependencies) & set(self._nodes.keys())
+
+    def _build_dependents(self) -> Dict[str, List[str]]:
+        """构建反向邻接表: dep_id → [依赖它的 task_id 列表]"""
+        dependents: Dict[str, List[str]] = {nid: [] for nid in self._nodes}
+        for node in self._nodes.values():
+            for dep in self._unique_deps(node):
+                dependents[dep].append(node.task_id)
+        return dependents
+
+    def _build_in_degree(self) -> Dict[str, int]:
+        """计算每个节点的入度"""
+        in_degree: Dict[str, int] = {nid: 0 for nid in self._nodes}
+        for node in self._nodes.values():
+            in_degree[node.task_id] = len(self._unique_deps(node))
+        return in_degree
+
     # ── 验证 ──
 
     def validate(self) -> List[str]:
@@ -111,29 +138,23 @@ class TaskGraph:
 
         # 3. 检查循环依赖 (Kahn 算法副产物)
         if not errors:
-            in_degree = {nid: 0 for nid in self._nodes}
-            for node in self._nodes.values():
-                for dep in node.dependencies:
-                    if dep in in_degree:
-                        in_degree[node.task_id] += 1
+            in_degree = self._build_in_degree()
+            dependents = self._build_dependents()
 
             queue = deque(nid for nid, d in in_degree.items() if d == 0)
             visited = 0
-            temp_degree = dict(in_degree)
 
             while queue:
                 nid = queue.popleft()
                 visited += 1
-                # 减少依赖此节点的入度
-                for node in self._nodes.values():
-                    if nid in node.dependencies:
-                        temp_degree[node.task_id] -= 1
-                        if temp_degree[node.task_id] == 0:
-                            queue.append(node.task_id)
+                for child in dependents[nid]:
+                    in_degree[child] -= 1
+                    if in_degree[child] == 0:
+                        queue.append(child)
 
             if visited < len(self._nodes):
                 cycle_nodes = [
-                    nid for nid, d in temp_degree.items() if d > 0
+                    nid for nid, d in in_degree.items() if d > 0
                 ]
                 errors.append(
                     f"Circular dependency detected among: {cycle_nodes}"
@@ -161,12 +182,8 @@ class TaskGraph:
         if not self._nodes:
             return []
 
-        # 计算入度
-        in_degree: Dict[str, int] = {nid: 0 for nid in self._nodes}
-        for node in self._nodes.values():
-            for dep in node.dependencies:
-                if dep in in_degree:
-                    in_degree[node.task_id] += 1
+        in_degree = self._build_in_degree()
+        dependents = self._build_dependents()
 
         # BFS 按层级弹出
         batches: List[Batch] = []
@@ -176,18 +193,17 @@ class TaskGraph:
         while current_layer:
             batch = Batch(
                 batch_id=batch_id,
-                tasks=[self._nodes[nid] for nid in sorted(current_layer)],
+                tasks=[self._nodes[nid] for nid in sorted(current_layer, key=_task_sort_key)],
             )
             batches.append(batch)
             batch_id += 1
 
             next_layer: List[str] = []
             for nid in current_layer:
-                for node in self._nodes.values():
-                    if nid in node.dependencies:
-                        in_degree[node.task_id] -= 1
-                        if in_degree[node.task_id] == 0:
-                            next_layer.append(node.task_id)
+                for child in dependents[nid]:
+                    in_degree[child] -= 1
+                    if in_degree[child] == 0:
+                        next_layer.append(child)
 
             current_layer = next_layer
 

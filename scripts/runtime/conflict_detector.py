@@ -9,7 +9,7 @@ v2.5.0 Phase 2 组件。
 from dataclasses import dataclass, field
 from typing import List, Tuple, Set
 
-from .task_graph import TaskNode
+from .task_graph import TaskNode, _task_sort_key
 
 
 @dataclass
@@ -58,7 +58,7 @@ class ConflictDetector:
         occupied_files: Set[str] = set()
 
         # 按 task_id 排序，保证确定性
-        sorted_tasks = sorted(tasks, key=lambda t: t.task_id)
+        sorted_tasks = sorted(tasks, key=lambda t: _task_sort_key(t.task_id))
 
         for task in sorted_tasks:
             task_files = set(task.writeset) if task.writeset else set()
