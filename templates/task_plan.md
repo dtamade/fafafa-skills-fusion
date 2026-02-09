@@ -24,6 +24,9 @@
 - Execution: TDD (implementation/verification) | Direct (others)
 - Backend: codex|claude
 - Dependencies: []
+- Writeset: []
+- CostBudget: 0
+- LatencyBudget: 0
 - Estimated: Xmin
 - Session: -
 - Output: -
