@@ -30,11 +30,11 @@ class BaseHookTestCase(unittest.TestCase):
         shutil.rmtree(self.temp_dir)
 
     def _write_sessions(self, data: dict):
-        with open(self.fusion_dir / "sessions.json", "w") as f:
+        with open(self.fusion_dir / "sessions.json", "w", encoding="utf-8") as f:
             json.dump(data, f)
 
     def _write_task_plan(self, content: str):
-        with open(self.fusion_dir / "task_plan.md", "w") as f:
+        with open(self.fusion_dir / "task_plan.md", "w", encoding="utf-8") as f:
             f.write(content)
 
     def _run_compat(self, command: str, fusion_dir: str = None) -> subprocess.CompletedProcess:

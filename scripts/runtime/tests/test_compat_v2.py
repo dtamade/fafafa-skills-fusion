@@ -35,15 +35,15 @@ class BaseTestCase(unittest.TestCase):
         shutil.rmtree(self.temp_dir)
 
     def _write_sessions(self, data: dict):
-        with open(self.fusion_dir / "sessions.json", "w") as f:
+        with open(self.fusion_dir / "sessions.json", "w", encoding="utf-8") as f:
             json.dump(data, f)
 
     def _write_task_plan(self, content: str):
-        with open(self.fusion_dir / "task_plan.md", "w") as f:
+        with open(self.fusion_dir / "task_plan.md", "w", encoding="utf-8") as f:
             f.write(content)
 
     def _write_config(self, enabled: bool = True):
-        with open(self.fusion_dir / "config.yaml", "w") as f:
+        with open(self.fusion_dir / "config.yaml", "w", encoding="utf-8") as f:
             f.write(f"runtime:\n  enabled: {str(enabled).lower()}\n  compat_mode: true\n")
 
 
@@ -62,7 +62,7 @@ class TestIsRuntimeEnabled(BaseTestCase):
         self.assertFalse(is_runtime_enabled(str(self.fusion_dir)))
 
     def test_no_runtime_section(self):
-        with open(self.fusion_dir / "config.yaml", "w") as f:
+        with open(self.fusion_dir / "config.yaml", "w", encoding="utf-8") as f:
             f.write("backends:\n  primary: codex\n")
         self.assertFalse(is_runtime_enabled(str(self.fusion_dir)))
 

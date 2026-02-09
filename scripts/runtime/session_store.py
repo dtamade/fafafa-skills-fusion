@@ -8,6 +8,7 @@ import json
 import time
 import hashlib
 import os
+import tempfile
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Callable
 from dataclasses import dataclass, field
@@ -275,8 +276,16 @@ class SessionStore:
             data.update(extra)
 
         try:
-            with open(self.sessions_file, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+            fd, tmp_path = tempfile.mkstemp(
+                dir=str(self.sessions_file.parent), suffix=".tmp"
+            )
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+                os.replace(tmp_path, str(self.sessions_file))
+            except BaseException:
+                os.unlink(tmp_path)
+                raise
         except IOError as e:
             raise IOError(f"Failed to sync snapshot: {e}") from e
 

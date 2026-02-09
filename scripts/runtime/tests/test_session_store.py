@@ -61,7 +61,7 @@ class TestSessionStoreAppend(unittest.TestCase):
         """写入文件的内容格式正确"""
         self.store.append_event("START", "IDLE", "INITIALIZE")
 
-        with open(self.store.events_file, "r") as f:
+        with open(self.store.events_file, "r", encoding="utf-8") as f:
             line = f.readline()
             data = json.loads(line)
 
@@ -162,7 +162,7 @@ class TestSessionStoreLoadEvents(unittest.TestCase):
         self.store.append_event("START", "IDLE", "INITIALIZE")
 
         # 写入一行损坏数据
-        with open(self.store.events_file, "a") as f:
+        with open(self.store.events_file, "a", encoding="utf-8") as f:
             f.write("not valid json\n")
 
         self.store.append_event("INIT_DONE", "INITIALIZE", "ANALYZE")
@@ -316,7 +316,7 @@ class TestSessionStoreSnapshot(unittest.TestCase):
         self.store.append_event("START", "IDLE", "INITIALIZE")
         self.store.sync_snapshot(State.INITIALIZE)
 
-        with open(self.store.sessions_file, "r") as f:
+        with open(self.store.sessions_file, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         self.assertEqual(data["current_phase"], "INITIALIZE")
@@ -338,7 +338,7 @@ class TestSessionStoreSnapshot(unittest.TestCase):
     def test_sync_snapshot_preserves_existing(self):
         """快照保留已有数据"""
         # 先写入一些数据
-        with open(self.store.sessions_file, "w") as f:
+        with open(self.store.sessions_file, "w", encoding="utf-8") as f:
             json.dump({"workflow_id": "test_123", "goal": "测试"}, f)
 
         self.store.sync_snapshot(State.ANALYZE)

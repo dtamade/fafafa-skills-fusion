@@ -8,6 +8,7 @@ v2.1.0 Week 2: 接入 EventBus 和 SessionStore。
 import json
 import time
 import os
+import tempfile
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Callable
 from dataclasses import dataclass, field, asdict
@@ -353,10 +354,18 @@ class FusionKernel:
                 runtime = data.get("_runtime", {})
                 runtime["scheduler"] = scheduler_data
                 data["_runtime"] = runtime
-                with open(sessions_file, "w", encoding="utf-8") as f:
-                    _json.dump(data, f, indent=2, ensure_ascii=False)
-        except Exception:
-            pass  # 故障安全
+                fd, tmp_path = tempfile.mkstemp(
+                    dir=str(sessions_file.parent), suffix=".tmp"
+                )
+                try:
+                    with os.fdopen(fd, "w", encoding="utf-8") as f:
+                        _json.dump(data, f, indent=2, ensure_ascii=False)
+                    os.replace(tmp_path, str(sessions_file))
+                except BaseException:
+                    os.unlink(tmp_path)
+                    raise
+        except (IOError, OSError, ValueError):
+            pass  # 故障安全: 文件 I/O 或 JSON 解析失败不阻塞主流程
 
     def complete_task(
         self,

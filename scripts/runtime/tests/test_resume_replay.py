@@ -124,7 +124,7 @@ class TestResumeFromEvents(unittest.TestCase):
 
         # 破坏 sessions.json
         sessions_file = self.fusion_dir / "sessions.json"
-        with open(sessions_file, "w") as f:
+        with open(sessions_file, "w", encoding="utf-8") as f:
             f.write("corrupted data!!!")
 
         # 快照恢复会失败（回退到 IDLE）
@@ -249,9 +249,9 @@ class TestFaultInjection(unittest.TestCase):
 
         # 在事件文件中插入损坏行
         events_file = self.fusion_dir / "events.jsonl"
-        with open(events_file, "r") as f:
+        with open(events_file, "r", encoding="utf-8") as f:
             lines = f.readlines()
-        with open(events_file, "w") as f:
+        with open(events_file, "w", encoding="utf-8") as f:
             f.write(lines[0])
             f.write("CORRUPTED LINE\n")
             f.write(lines[1])

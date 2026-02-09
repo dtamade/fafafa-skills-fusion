@@ -157,7 +157,7 @@ class TestKernelPersistence(unittest.TestCase):
         sessions_file = self.fusion_dir / "sessions.json"
         self.assertTrue(sessions_file.exists())
 
-        with open(sessions_file, "r") as f:
+        with open(sessions_file, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         self.assertEqual(data["current_phase"], "INITIALIZE")
@@ -174,7 +174,7 @@ class TestKernelPersistence(unittest.TestCase):
         events_file = self.fusion_dir / "events.jsonl"
         self.assertTrue(events_file.exists())
 
-        with open(events_file, "r") as f:
+        with open(events_file, "r", encoding="utf-8") as f:
             lines = f.readlines()
 
         self.assertEqual(len(lines), 2)
@@ -221,7 +221,7 @@ class TestCreateKernel(unittest.TestCase):
 
         # 创建预存状态
         sessions_file = self.fusion_dir / "sessions.json"
-        with open(sessions_file, "w") as f:
+        with open(sessions_file, "w", encoding="utf-8") as f:
             json.dump({"current_phase": "EXECUTE"}, f)
 
     def tearDown(self):
