@@ -1,8 +1,10 @@
 """
-Fusion v2.1.0 Phase 1 回归测试运行器
+Fusion v2.5.0 回归测试运行器
 
 用法:
     python3 scripts/runtime/regression_runner.py --suite phase1 --min-pass-rate 0.99
+    python3 scripts/runtime/regression_runner.py --suite phase2 --min-pass-rate 0.99
+    python3 scripts/runtime/regression_runner.py --suite all --min-pass-rate 0.99
     python3 scripts/runtime/regression_runner.py --scenario resume_reliability --runs 20 --min-pass-rate 0.95
 """
 
@@ -25,6 +27,11 @@ from runtime.kernel import FusionKernel
 from runtime.session_store import SessionStore
 from runtime.event_bus import EventBus
 from runtime.compat_v2 import adapt_stop_guard, adapt_pretool, adapt_posttool
+from runtime.task_graph import TaskGraph, TaskNode
+from runtime.conflict_detector import ConflictDetector
+from runtime.budget_manager import BudgetManager, BudgetConfig
+from runtime.router import Router
+from runtime.scheduler import Scheduler, SchedulerConfig
 
 
 @dataclass
@@ -896,6 +903,505 @@ def scenario_resume_reliability_single() -> ScenarioResult:
 
 
 # ──────────────────────────────────────────────
+# Phase 2 场景: DAG / 冲突 / 预算 / 路由 / 调度 / 集成
+# ──────────────────────────────────────────────
+
+_TASK_PLAN_PARALLEL = """\
+## Tasks
+
+### Task 1: 用户模块 [PENDING]
+- Type: implementation
+- Dependencies: []
+- Writeset: [src/user.py]
+
+### Task 2: 订单模块 [PENDING]
+- Type: implementation
+- Dependencies: []
+- Writeset: [src/order.py]
+
+### Task 3: 支付模块 [PENDING]
+- Type: implementation
+- Dependencies: []
+- Writeset: [src/payment.py]
+
+### Task 4: 集成测试 [PENDING]
+- Type: verification
+- Dependencies: [1, 2, 3]
+- Writeset: [tests/integration.py]
+"""
+
+_TASK_PLAN_CONFLICT = """\
+## Tasks
+
+### Task 1: 模块A写入shared [PENDING]
+- Type: implementation
+- Dependencies: []
+- Writeset: [src/shared.py, src/a.py]
+
+### Task 2: 模块B写入shared [PENDING]
+- Type: implementation
+- Dependencies: []
+- Writeset: [src/shared.py, src/b.py]
+
+### Task 3: 模块C独立 [PENDING]
+- Type: documentation
+- Dependencies: []
+- Writeset: [src/c.py]
+"""
+
+
+def _make_fusion_with_tasks(task_plan_content: str) -> Path:
+    """创建带 task_plan.md 和 sessions.json 的 .fusion 目录"""
+    fusion_dir = _make_fusion_dir()
+    (fusion_dir / "task_plan.md").write_text(task_plan_content, encoding="utf-8")
+    (fusion_dir / "sessions.json").write_text(json.dumps({
+        "status": "in_progress", "goal": "regression test",
+        "current_phase": "EXECUTE",
+        "_runtime": {"version": "2.1.0", "last_event_counter": 0},
+    }, ensure_ascii=False), encoding="utf-8")
+    return fusion_dir
+
+
+def scenario_dag_topological_sort() -> ScenarioResult:
+    """P01: DAG 拓扑排序产出正确批次"""
+    t0 = time.monotonic()
+    try:
+        graph = TaskGraph([
+            TaskNode(task_id="1", name="A"),
+            TaskNode(task_id="2", name="B", dependencies=["1"]),
+            TaskNode(task_id="3", name="C", dependencies=["1"]),
+            TaskNode(task_id="4", name="D", dependencies=["2", "3"]),
+        ])
+        batches = graph.topological_sort()
+        assert len(batches) == 3
+        assert batches[0].task_ids == ["1"]
+        assert set(batches[1].task_ids) == {"2", "3"}
+        assert batches[2].task_ids == ["4"]
+        return ScenarioResult("P01-dag-topo-sort", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P01-dag-topo-sort", False, (time.monotonic() - t0) * 1000, str(e))
+
+
+def scenario_dag_circular_detection() -> ScenarioResult:
+    """P02: DAG 循环依赖检测"""
+    t0 = time.monotonic()
+    try:
+        graph = TaskGraph([
+            TaskNode(task_id="1", name="A", dependencies=["2"]),
+            TaskNode(task_id="2", name="B", dependencies=["1"]),
+        ])
+        errors = graph.validate()
+        assert any("Circular" in e for e in errors)
+        return ScenarioResult("P02-dag-cycle-detect", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P02-dag-cycle-detect", False, (time.monotonic() - t0) * 1000, str(e))
+
+
+def scenario_dag_from_task_plan() -> ScenarioResult:
+    """P03: 从 task_plan.md 解析 DAG"""
+    t0 = time.monotonic()
+    fusion_dir = _make_fusion_with_tasks(_TASK_PLAN_PARALLEL)
+    try:
+        graph = TaskGraph.from_task_plan(str(fusion_dir / "task_plan.md"))
+        assert graph.node_count == 4
+        assert graph.get_node("4").dependencies == ["1", "2", "3"]
+        return ScenarioResult("P03-dag-from-taskplan", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P03-dag-from-taskplan", False, (time.monotonic() - t0) * 1000, str(e))
+    finally:
+        _cleanup(fusion_dir)
+
+
+def scenario_dag_ready_tasks() -> ScenarioResult:
+    """P04: DAG 就绪任务查询"""
+    t0 = time.monotonic()
+    try:
+        graph = TaskGraph([
+            TaskNode(task_id="1", name="A"),
+            TaskNode(task_id="2", name="B", dependencies=["1"]),
+        ])
+        ready = graph.get_ready_tasks()
+        assert len(ready) == 1
+        assert ready[0].task_id == "1"
+
+        graph.mark_completed("1")
+        ready = graph.get_ready_tasks()
+        assert len(ready) == 1
+        assert ready[0].task_id == "2"
+        return ScenarioResult("P04-dag-ready-tasks", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P04-dag-ready-tasks", False, (time.monotonic() - t0) * 1000, str(e))
+
+
+def scenario_dag_duplicate_deps() -> ScenarioResult:
+    """P05: DAG 重复依赖去重"""
+    t0 = time.monotonic()
+    try:
+        graph = TaskGraph([
+            TaskNode(task_id="1", name="A"),
+            TaskNode(task_id="2", name="B", dependencies=["1", "1"]),
+        ])
+        assert graph.validate() == []
+        batches = graph.topological_sort()
+        assert len(batches) == 2
+        return ScenarioResult("P05-dag-dup-deps", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P05-dag-dup-deps", False, (time.monotonic() - t0) * 1000, str(e))
+
+
+def scenario_conflict_detection() -> ScenarioResult:
+    """P06: 文件冲突检测"""
+    t0 = time.monotonic()
+    try:
+        detector = ConflictDetector()
+        tasks = [
+            TaskNode(task_id="1", name="A", writeset=["shared.py"]),
+            TaskNode(task_id="2", name="B", writeset=["shared.py"]),
+            TaskNode(task_id="3", name="C", writeset=["other.py"]),
+        ]
+        result = detector.check(tasks)
+        assert "1" in result.safe_tasks or "2" in result.safe_tasks
+        assert "3" in result.safe_tasks
+        assert len(result.deferred_tasks) > 0
+        return ScenarioResult("P06-conflict-detect", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P06-conflict-detect", False, (time.monotonic() - t0) * 1000, str(e))
+
+
+def scenario_conflict_no_overlap() -> ScenarioResult:
+    """P07: 无冲突全部安全"""
+    t0 = time.monotonic()
+    try:
+        detector = ConflictDetector()
+        tasks = [
+            TaskNode(task_id="1", name="A", writeset=["a.py"]),
+            TaskNode(task_id="2", name="B", writeset=["b.py"]),
+        ]
+        result = detector.check(tasks)
+        assert len(result.safe_tasks) == 2
+        assert len(result.deferred_tasks) == 0
+        return ScenarioResult("P07-no-conflict", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P07-no-conflict", False, (time.monotonic() - t0) * 1000, str(e))
+
+
+def scenario_budget_tracking() -> ScenarioResult:
+    """P08: 预算追踪与超预算检测"""
+    t0 = time.monotonic()
+    try:
+        bm = BudgetManager(BudgetConfig(global_token_limit=1000))
+        assert not bm.is_over_budget()
+        bm.record_usage("t1", tokens=600, latency_ms=100)
+        assert not bm.is_over_budget()
+        bm.record_usage("t2", tokens=500, latency_ms=100)
+        assert bm.is_over_budget()
+        return ScenarioResult("P08-budget-tracking", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P08-budget-tracking", False, (time.monotonic() - t0) * 1000, str(e))
+
+
+def scenario_budget_can_execute() -> ScenarioResult:
+    """P09: 预算可执行判断"""
+    t0 = time.monotonic()
+    try:
+        bm = BudgetManager(BudgetConfig(global_token_limit=1000))
+        bm.record_usage("t1", tokens=900, latency_ms=0)
+        assert not bm.can_execute(cost_budget=200, latency_budget=0)
+        assert bm.can_execute(cost_budget=50, latency_budget=0)
+        return ScenarioResult("P09-budget-can-exec", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P09-budget-can-exec", False, (time.monotonic() - t0) * 1000, str(e))
+
+
+def scenario_budget_warning() -> ScenarioResult:
+    """P10: 预算警告"""
+    t0 = time.monotonic()
+    try:
+        bm = BudgetManager(BudgetConfig(global_token_limit=1000, warning_threshold=0.8))
+        bm.record_usage("t1", tokens=850, latency_ms=0)
+        assert bm.is_warning()
+        suggestion = bm.suggest_downgrade()
+        assert suggestion is not None
+        return ScenarioResult("P10-budget-warning", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P10-budget-warning", False, (time.monotonic() - t0) * 1000, str(e))
+
+
+def scenario_router_type_based() -> ScenarioResult:
+    """P11: 路由按任务类型分配"""
+    t0 = time.monotonic()
+    try:
+        router = Router()
+        impl_task = TaskNode(task_id="1", name="A", task_type="implementation")
+        doc_task = TaskNode(task_id="2", name="B", task_type="documentation")
+        assert router.route(impl_task).backend == "codex"
+        assert router.route(doc_task).backend == "claude"
+        return ScenarioResult("P11-router-type", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P11-router-type", False, (time.monotonic() - t0) * 1000, str(e))
+
+
+def scenario_router_budget_downgrade() -> ScenarioResult:
+    """P12: 路由超预算降级"""
+    t0 = time.monotonic()
+    try:
+        bm = BudgetManager(BudgetConfig(global_token_limit=100))
+        bm.record_usage("prev", tokens=100, latency_ms=0)
+        router = Router(budget_manager=bm)
+        task = TaskNode(task_id="1", name="A", task_type="implementation")
+        decision = router.route(task)
+        assert decision.backend == "claude"
+        return ScenarioResult("P12-router-downgrade", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P12-router-downgrade", False, (time.monotonic() - t0) * 1000, str(e))
+
+
+def scenario_scheduler_serial_mode() -> ScenarioResult:
+    """P13: 调度器关闭时串行"""
+    t0 = time.monotonic()
+    try:
+        graph = TaskGraph([
+            TaskNode(task_id="1", name="A"),
+            TaskNode(task_id="2", name="B"),
+            TaskNode(task_id="3", name="C"),
+        ])
+        sched = Scheduler(graph=graph, config=SchedulerConfig(enabled=False))
+        decision = sched.pick_next_batch()
+        assert decision is not None
+        assert len(decision.batch.tasks) == 1
+        return ScenarioResult("P13-sched-serial", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P13-sched-serial", False, (time.monotonic() - t0) * 1000, str(e))
+
+
+def scenario_scheduler_parallel_mode() -> ScenarioResult:
+    """P14: 调度器启用时并行"""
+    t0 = time.monotonic()
+    try:
+        graph = TaskGraph([
+            TaskNode(task_id="1", name="A", writeset=["a.py"]),
+            TaskNode(task_id="2", name="B", writeset=["b.py"]),
+        ])
+        sched = Scheduler(graph=graph, config=SchedulerConfig(enabled=True, max_parallel=2))
+        decision = sched.pick_next_batch()
+        assert len(decision.batch.tasks) == 2
+        return ScenarioResult("P14-sched-parallel", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P14-sched-parallel", False, (time.monotonic() - t0) * 1000, str(e))
+
+
+def scenario_scheduler_conflict_defer() -> ScenarioResult:
+    """P15: 调度器冲突推迟"""
+    t0 = time.monotonic()
+    try:
+        graph = TaskGraph([
+            TaskNode(task_id="1", name="A", writeset=["shared.py"]),
+            TaskNode(task_id="2", name="B", writeset=["shared.py"]),
+        ])
+        sched = Scheduler(graph=graph, config=SchedulerConfig(enabled=True, max_parallel=2))
+        decision = sched.pick_next_batch()
+        assert len(decision.batch.tasks) == 1
+        assert len(decision.deferred) == 1
+        return ScenarioResult("P15-sched-conflict", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P15-sched-conflict", False, (time.monotonic() - t0) * 1000, str(e))
+
+
+def scenario_scheduler_budget_skip() -> ScenarioResult:
+    """P16: 调度器预算跳过"""
+    t0 = time.monotonic()
+    try:
+        bm = BudgetManager(BudgetConfig(global_token_limit=100))
+        bm.record_usage("prev", tokens=80, latency_ms=0)
+        graph = TaskGraph([
+            TaskNode(task_id="1", name="A", cost_budget=50),
+            TaskNode(task_id="2", name="B", cost_budget=10),
+        ])
+        sched = Scheduler(graph=graph, config=SchedulerConfig(enabled=True), budget_manager=bm)
+        decision = sched.pick_next_batch()
+        assert "1" in decision.budget_skipped
+        assert "2" in decision.batch.task_ids
+        return ScenarioResult("P16-sched-budget-skip", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P16-sched-budget-skip", False, (time.monotonic() - t0) * 1000, str(e))
+
+
+def scenario_scheduler_lifecycle() -> ScenarioResult:
+    """P17: 调度器完整生命周期"""
+    t0 = time.monotonic()
+    try:
+        graph = TaskGraph([
+            TaskNode(task_id="1", name="A"),
+            TaskNode(task_id="2", name="B", dependencies=["1"]),
+        ])
+        sched = Scheduler(graph=graph, config=SchedulerConfig(enabled=True))
+        d1 = sched.pick_next_batch()
+        assert d1.batch.task_ids == ["1"]
+
+        sched.on_task_done("1", tokens_used=100)
+        sched.on_batch_done()
+
+        d2 = sched.pick_next_batch()
+        assert d2.batch.task_ids == ["2"]
+
+        sched.on_task_done("2", tokens_used=100)
+        assert sched.is_all_done()
+        return ScenarioResult("P17-sched-lifecycle", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P17-sched-lifecycle", False, (time.monotonic() - t0) * 1000, str(e))
+
+
+def scenario_kernel_init_scheduler() -> ScenarioResult:
+    """P18: Kernel 初始化 Scheduler"""
+    t0 = time.monotonic()
+    fusion_dir = _make_fusion_with_tasks(_TASK_PLAN_PARALLEL)
+    try:
+        k = FusionKernel(fusion_dir=str(fusion_dir))
+        k.load_state()
+        sched = k.init_scheduler(scheduler_config=SchedulerConfig(enabled=True, max_parallel=3))
+        assert sched is not None
+        assert k.context.scheduler_enabled
+        progress = sched.get_progress()
+        assert progress["total"] == 4
+        return ScenarioResult("P18-kernel-init-sched", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P18-kernel-init-sched", False, (time.monotonic() - t0) * 1000, str(e))
+    finally:
+        _cleanup(fusion_dir)
+
+
+def scenario_kernel_parallel_batch() -> ScenarioResult:
+    """P19: Kernel 并行批次调度"""
+    t0 = time.monotonic()
+    fusion_dir = _make_fusion_with_tasks(_TASK_PLAN_PARALLEL)
+    try:
+        k = FusionKernel(fusion_dir=str(fusion_dir))
+        k.load_state()
+        k.init_scheduler(scheduler_config=SchedulerConfig(enabled=True, max_parallel=3))
+
+        decision = k.get_next_batch()
+        assert decision is not None
+        assert len(decision.batch.tasks) == 3
+        assert "4" not in decision.batch.task_ids
+        return ScenarioResult("P19-kernel-parallel-batch", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P19-kernel-parallel-batch", False, (time.monotonic() - t0) * 1000, str(e))
+    finally:
+        _cleanup(fusion_dir)
+
+
+def scenario_kernel_complete_task() -> ScenarioResult:
+    """P20: Kernel complete_task 更新上下文"""
+    t0 = time.monotonic()
+    fusion_dir = _make_fusion_with_tasks(_TASK_PLAN_PARALLEL)
+    try:
+        k = FusionKernel(fusion_dir=str(fusion_dir))
+        k.load_state()
+        k.init_scheduler(scheduler_config=SchedulerConfig(enabled=True, max_parallel=3))
+
+        k.complete_task("1", tokens_used=500, latency_ms=100)
+        assert k.context.completed_tasks == 1
+        assert k.context.pending_tasks == 3
+
+        # 验证 sessions.json 有 scheduler 数据
+        data = json.loads((fusion_dir / "sessions.json").read_text())
+        assert "scheduler" in data.get("_runtime", {})
+        return ScenarioResult("P20-kernel-complete-task", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P20-kernel-complete-task", False, (time.monotonic() - t0) * 1000, str(e))
+    finally:
+        _cleanup(fusion_dir)
+
+
+def scenario_kernel_scheduler_conflict() -> ScenarioResult:
+    """P21: Kernel 调度器冲突处理"""
+    t0 = time.monotonic()
+    fusion_dir = _make_fusion_with_tasks(_TASK_PLAN_CONFLICT)
+    try:
+        k = FusionKernel(fusion_dir=str(fusion_dir))
+        k.load_state()
+        k.init_scheduler(scheduler_config=SchedulerConfig(enabled=True, max_parallel=3))
+
+        decision = k.get_next_batch()
+        assert not {"1", "2"}.issubset(set(decision.batch.task_ids))
+        assert "3" in decision.batch.task_ids
+        return ScenarioResult("P21-kernel-sched-conflict", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P21-kernel-sched-conflict", False, (time.monotonic() - t0) * 1000, str(e))
+    finally:
+        _cleanup(fusion_dir)
+
+
+def scenario_kernel_status_with_scheduler() -> ScenarioResult:
+    """P22: Kernel get_status 包含 scheduler"""
+    t0 = time.monotonic()
+    fusion_dir = _make_fusion_with_tasks(_TASK_PLAN_PARALLEL)
+    try:
+        k = FusionKernel(fusion_dir=str(fusion_dir))
+        k.load_state()
+        k.init_scheduler(scheduler_config=SchedulerConfig(enabled=True))
+        status = k.get_status()
+        assert "scheduler" in status
+        assert status["scheduler"]["enabled"]
+        return ScenarioResult("P22-kernel-status-sched", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P22-kernel-status-sched", False, (time.monotonic() - t0) * 1000, str(e))
+    finally:
+        _cleanup(fusion_dir)
+
+
+def scenario_compat_pretool_batch() -> ScenarioResult:
+    """P23: compat pretool 显示批次信息"""
+    t0 = time.monotonic()
+    fusion_dir = _make_fusion_with_tasks(_TASK_PLAN_PARALLEL)
+    try:
+        k = FusionKernel(fusion_dir=str(fusion_dir))
+        k.load_state()
+        k.init_scheduler(scheduler_config=SchedulerConfig(enabled=True, max_parallel=3))
+        k.complete_task("1", tokens_used=100, latency_ms=50)
+
+        result = adapt_pretool(str(fusion_dir))
+        assert result.active
+        batch_lines = [l for l in result.lines if "Batch" in l]
+        assert len(batch_lines) > 0
+        return ScenarioResult("P23-compat-pretool-batch", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P23-compat-pretool-batch", False, (time.monotonic() - t0) * 1000, str(e))
+    finally:
+        _cleanup(fusion_dir)
+
+
+def scenario_kernel_no_scheduler() -> ScenarioResult:
+    """P24: Kernel 未初始化 scheduler 时 get_next_batch 返回 None"""
+    t0 = time.monotonic()
+    fusion_dir = _make_fusion_with_tasks(_TASK_PLAN_PARALLEL)
+    try:
+        k = FusionKernel(fusion_dir=str(fusion_dir))
+        assert k.get_next_batch() is None
+        assert k.scheduler is None
+        return ScenarioResult("P24-kernel-no-sched", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P24-kernel-no-sched", False, (time.monotonic() - t0) * 1000, str(e))
+    finally:
+        _cleanup(fusion_dir)
+
+
+def scenario_dag_parse_brackets_in_name() -> ScenarioResult:
+    """P25: task_plan.md 任务名含中括号"""
+    t0 = time.monotonic()
+    try:
+        content = "### Task 1: Fix [Auth] module [PENDING]\n- Dependencies: []\n"
+        graph = TaskGraph.from_task_plan_content(content)
+        node = graph.get_node("1")
+        assert node is not None
+        assert node.status == "PENDING"
+        assert "[Auth]" in node.name
+        return ScenarioResult("P25-dag-brackets-name", True, (time.monotonic() - t0) * 1000)
+    except Exception as e:
+        return ScenarioResult("P25-dag-brackets-name", False, (time.monotonic() - t0) * 1000, str(e))
+
+
+# ──────────────────────────────────────────────
 # 场景注册表
 # ──────────────────────────────────────────────
 
@@ -937,6 +1443,36 @@ PHASE1_SCENARIOS = [
     scenario_full_interrupt_every_step,
 ]
 
+PHASE2_SCENARIOS = [
+    scenario_dag_topological_sort,
+    scenario_dag_circular_detection,
+    scenario_dag_from_task_plan,
+    scenario_dag_ready_tasks,
+    scenario_dag_duplicate_deps,
+    scenario_conflict_detection,
+    scenario_conflict_no_overlap,
+    scenario_budget_tracking,
+    scenario_budget_can_execute,
+    scenario_budget_warning,
+    scenario_router_type_based,
+    scenario_router_budget_downgrade,
+    scenario_scheduler_serial_mode,
+    scenario_scheduler_parallel_mode,
+    scenario_scheduler_conflict_defer,
+    scenario_scheduler_budget_skip,
+    scenario_scheduler_lifecycle,
+    scenario_kernel_init_scheduler,
+    scenario_kernel_parallel_batch,
+    scenario_kernel_complete_task,
+    scenario_kernel_scheduler_conflict,
+    scenario_kernel_status_with_scheduler,
+    scenario_compat_pretool_batch,
+    scenario_kernel_no_scheduler,
+    scenario_dag_parse_brackets_in_name,
+]
+
+ALL_SCENARIOS = PHASE1_SCENARIOS + PHASE2_SCENARIOS
+
 
 def run_suite(scenarios, label="phase1"):
     """运行场景列表并输出报告"""
@@ -962,8 +1498,8 @@ def run_suite(scenarios, label="phase1"):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Fusion v2.1.0 回归测试运行器")
-    parser.add_argument("--suite", default="phase1", help="测试套件 (phase1)")
+    parser = argparse.ArgumentParser(description="Fusion v2.5.0 回归测试运行器")
+    parser.add_argument("--suite", default="all", help="测试套件 (phase1|phase2|all)")
     parser.add_argument("--scenario", help="专项场景 (resume_reliability)")
     parser.add_argument("--runs", type=int, default=20, help="重复次数 (用于可靠性测试)")
     parser.add_argument("--min-pass-rate", type=float, default=0.99, help="最低通过率")
@@ -974,10 +1510,18 @@ def main():
         print("-" * 60)
         scenarios = [scenario_resume_reliability_single for _ in range(args.runs)]
         results, rate = run_suite(scenarios, label="resume_reliability")
-    else:
+    elif args.suite == "phase1":
         print(f"🧪 Phase 1 Regression Suite ({len(PHASE1_SCENARIOS)} scenarios)")
         print("-" * 60)
-        results, rate = run_suite(PHASE1_SCENARIOS, label=args.suite)
+        results, rate = run_suite(PHASE1_SCENARIOS, label="phase1")
+    elif args.suite == "phase2":
+        print(f"🧪 Phase 2 Regression Suite ({len(PHASE2_SCENARIOS)} scenarios)")
+        print("-" * 60)
+        results, rate = run_suite(PHASE2_SCENARIOS, label="phase2")
+    else:
+        print(f"🧪 Full Regression Suite ({len(ALL_SCENARIOS)} scenarios)")
+        print("-" * 60)
+        results, rate = run_suite(ALL_SCENARIOS, label="all")
 
     if rate < args.min_pass_rate:
         print(f"\n❌ FAIL: Pass rate {rate*100:.1f}% < {args.min_pass_rate*100:.1f}%")

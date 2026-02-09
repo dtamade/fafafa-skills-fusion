@@ -1,13 +1,14 @@
 """
-Fusion v2.1.0 Hook 性能基准测试
+Fusion v2.5.0 Hook + Scheduler 性能基准测试
 
 验证 Hook 延迟达标:
 - PreToolUse (pretool) p95 < 80ms
 - StopHook (stop-guard) p95 < 150ms
+- Scheduler.pick_next_batch() p95 < 200ms
 
 用法:
     python3 scripts/runtime/bench_hook_latency.py --runs 300
-    python3 scripts/runtime/bench_hook_latency.py --runs 300 --pretool-p95-ms 80 --stop-p95-ms 150
+    python3 scripts/runtime/bench_hook_latency.py --runs 300 --pretool-p95-ms 80 --stop-p95-ms 150 --sched-p95-ms 200
 """
 
 import argparse
@@ -24,6 +25,16 @@ from typing import List
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from runtime.compat_v2 import adapt_pretool, adapt_posttool, adapt_stop_guard
+from runtime.task_graph import TaskGraph, TaskNode
+from runtime.conflict_detector import ConflictDetector
+from runtime.budget_manager import BudgetManager, BudgetConfig
+from runtime.router import Router
+from runtime.scheduler import Scheduler, SchedulerConfig
+from runtime.task_graph import TaskGraph, TaskNode
+from runtime.conflict_detector import ConflictDetector
+from runtime.budget_manager import BudgetManager, BudgetConfig
+from runtime.router import Router
+from runtime.scheduler import Scheduler, SchedulerConfig
 
 
 @dataclass
@@ -129,6 +140,69 @@ def bench_stop_guard(fusion_dir: Path, runs: int) -> BenchResult:
     )
 
 
+def _build_scheduler_graph(task_count: int) -> Scheduler:
+    """构建指定规模的 DAG 用于调度基准"""
+    # 构建菱形 DAG: 第一个任务是根，中间任务依赖根，最后一个依赖所有中间任务
+    nodes = []
+    mid_count = max(1, task_count - 2)
+
+    nodes.append(TaskNode(task_id="0", name="root", writeset=["root.py"]))
+    for i in range(1, mid_count + 1):
+        nodes.append(TaskNode(
+            task_id=str(i), name=f"task_{i}",
+            dependencies=["0"],
+            writeset=[f"src/mod_{i}.py"],
+            cost_budget=1000,
+        ))
+    if task_count > 2:
+        nodes.append(TaskNode(
+            task_id=str(mid_count + 1), name="final",
+            dependencies=[str(i) for i in range(1, mid_count + 1)],
+            writeset=["tests/test_all.py"],
+        ))
+
+    graph = TaskGraph(nodes)
+    # 完成根任务以使中间层就绪
+    graph.mark_completed("0")
+
+    conflict = ConflictDetector()
+    budget = BudgetManager(BudgetConfig(global_token_limit=1000000))
+    router = Router(budget_manager=budget)
+
+    return Scheduler(
+        graph=graph,
+        config=SchedulerConfig(enabled=True, max_parallel=task_count),
+        conflict_detector=conflict,
+        budget_manager=budget,
+        router=router,
+    )
+
+
+def bench_scheduler(task_count: int, runs: int) -> BenchResult:
+    """基准测试 Scheduler.pick_next_batch() 延迟"""
+    sched = _build_scheduler_graph(task_count)
+    latencies = []
+
+    for _ in range(runs):
+        # 每次重建以避免状态累积
+        sched = _build_scheduler_graph(task_count)
+        t0 = time.monotonic()
+        sched.pick_next_batch()
+        latencies.append((time.monotonic() - t0) * 1000)
+
+    latencies.sort()
+    return BenchResult(
+        name=f"scheduler({task_count}tasks)",
+        runs=runs,
+        p50_ms=_percentile(latencies, 50),
+        p95_ms=_percentile(latencies, 95),
+        p99_ms=_percentile(latencies, 99),
+        min_ms=min(latencies),
+        max_ms=max(latencies),
+        mean_ms=statistics.mean(latencies),
+    )
+
+
 def _percentile(data: List[float], pct: int) -> float:
     """计算百分位数"""
     n = len(data)
@@ -152,13 +226,14 @@ def print_result(result: BenchResult, threshold_ms: float = 0):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Fusion v2.1.0 Hook 性能基准")
+    parser = argparse.ArgumentParser(description="Fusion v2.5.0 Hook + Scheduler 性能基准")
     parser.add_argument("--runs", type=int, default=300, help="测试轮数")
     parser.add_argument("--pretool-p95-ms", type=float, default=80, help="pretool p95 阈值 (ms)")
     parser.add_argument("--stop-p95-ms", type=float, default=150, help="stop-guard p95 阈值 (ms)")
+    parser.add_argument("--sched-p95-ms", type=float, default=200, help="scheduler p95 阈值 (ms)")
     args = parser.parse_args()
 
-    print(f"⚡ Fusion Hook Latency Benchmark ({args.runs} runs)")
+    print(f"⚡ Fusion Hook + Scheduler Latency Benchmark ({args.runs} runs)")
     print("=" * 50)
 
     fusion_dir = _setup_active_workflow()
@@ -187,6 +262,13 @@ def main():
         print_result(stop_result, args.stop_p95_ms)
         if stop_result.p95_ms > args.stop_p95_ms:
             all_pass = False
+
+        # Bench scheduler (不同规模)
+        for task_count in [5, 10, 20]:
+            sched_result = bench_scheduler(task_count, args.runs)
+            print_result(sched_result, args.sched_p95_ms)
+            if sched_result.p95_ms > args.sched_p95_ms:
+                all_pass = False
 
         print(f"\n{'='*50}")
         if all_pass:
