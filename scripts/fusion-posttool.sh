@@ -17,6 +17,15 @@ SNAPSHOT_FILE="$FUSION_DIR/.progress_snapshot"
 [ -d "$FUSION_DIR" ] || exit 0
 [ -f "$FUSION_DIR/sessions.json" ] || exit 0
 
+# --- Runtime v2.1 adapter ---
+# If runtime is enabled, delegate to Python compat_v2 module.
+if [ -f "$FUSION_DIR/config.yaml" ] && grep -q 'enabled: *true' "$FUSION_DIR/config.yaml" 2>/dev/null; then
+    if python3 -m runtime.compat_v2 posttool "$FUSION_DIR" 2>/dev/null; then
+        exit 0
+    fi
+    # Python failed - fall through to Shell logic
+fi
+
 # --- JSON parsing helper ---
 json_get() {
     local file="$1" key="$2"

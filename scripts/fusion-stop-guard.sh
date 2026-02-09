@@ -238,6 +238,25 @@ main() {
         exit 0
     fi
 
+    # --- Runtime v2.1 adapter ---
+    # If runtime is enabled, delegate to Python compat_v2 module.
+    # Falls back to Shell logic if Python call fails.
+    if [ -f "$FUSION_DIR/config.yaml" ] && grep -q 'enabled: *true' "$FUSION_DIR/config.yaml" 2>/dev/null; then
+        local runtime_output
+        if runtime_output=$(python3 -m runtime.compat_v2 stop-guard "$FUSION_DIR" 2>/dev/null); then
+            # Python succeeded - use its output
+            local decision
+            decision=$(echo "$runtime_output" | python3 -c "import sys,json; print(json.load(sys.stdin).get('decision','allow'))" 2>/dev/null || echo "allow")
+            if [ "$decision" = "allow" ]; then
+                exit 0
+            else
+                echo "$runtime_output"
+                exit 0
+            fi
+        fi
+        # Python failed - fall through to Shell logic
+    fi
+
     # Use unified state lock (same as pause/cancel/resume)
     # This prevents concurrent writes to sessions.json
 

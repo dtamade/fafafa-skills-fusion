@@ -20,6 +20,15 @@ FUSION_DIR=".fusion"
 # Fast exit: no sessions.json → not initialized
 [ -f "$FUSION_DIR/sessions.json" ] || exit 0
 
+# --- Runtime v2.1 adapter ---
+# If runtime is enabled, delegate to Python compat_v2 module.
+if [ -f "$FUSION_DIR/config.yaml" ] && grep -q 'enabled: *true' "$FUSION_DIR/config.yaml" 2>/dev/null; then
+    if python3 -m runtime.compat_v2 pretool "$FUSION_DIR" 2>/dev/null; then
+        exit 0
+    fi
+    # Python failed - fall through to Shell logic
+fi
+
 # --- Cross-platform Unicode detection ---
 # Use ASCII fallback for terminals that don't support Unicode well (Windows CMD)
 # Priority: WT_SESSION (Windows Terminal) > TERM_PROGRAM (VSCode/iTerm) > valid TERM
