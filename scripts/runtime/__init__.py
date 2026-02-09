@@ -55,6 +55,15 @@ from .scheduler import (
     ScheduleDecision,
 )
 
+from .config import (
+    load_raw_config,
+    load_fusion_config,
+)
+
+from .safe_backlog import (
+    generate_safe_backlog,
+)
+
 __version__ = "2.1.0"
 __all__ = [
     # State Machine
@@ -94,4 +103,9 @@ __all__ = [
     "Scheduler",
     "SchedulerConfig",
     "ScheduleDecision",
+    # Config
+    "load_raw_config",
+    "load_fusion_config",
+    # Safe backlog
+    "generate_safe_backlog",
 ]

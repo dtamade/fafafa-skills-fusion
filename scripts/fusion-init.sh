@@ -53,6 +53,7 @@ cat > "$FUSION_DIR/config.yaml" << 'CONFIG_EOF'
 # Runtime engine (v2.5.0)
 runtime:
   enabled: true
+  compat_mode: true
   version: "2.5.0"
 
 # Backend configuration
@@ -64,6 +65,19 @@ backends:
 execution:
   parallel: 2
   timeout: 7200000  # 2 hours
+
+# Scheduler settings
+scheduler:
+  enabled: true
+  max_parallel: 2
+  fail_fast: false
+
+# Budget settings
+budget:
+  global_token_limit: 100000
+  global_latency_limit_ms: 7200000
+  warning_threshold: 0.8
+  hard_limit_action: serial
 
 # TDD settings
 tdd:
@@ -90,6 +104,7 @@ else
   "status": "not_started",
   "current_phase": null,
   "codex_session": null,
+  "claude_session": null,
   "tasks": {},
   "strikes": {
     "current_task": null,

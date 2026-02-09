@@ -258,6 +258,37 @@ class TestCreateKernel(unittest.TestCase):
         kernel = create_kernel(fusion_dir=str(self.fusion_dir))
         self.assertEqual(kernel.current_state, State.EXECUTE)
 
+    def test_create_kernel_auto_init_scheduler_from_config(self):
+        """create_kernel 自动从 config.yaml 初始化 scheduler"""
+        (self.fusion_dir / "task_plan.md").write_text(
+            "### Task 1: A [PENDING]\n"
+            "- Type: implementation\n"
+            "- Dependencies: []\n",
+            encoding="utf-8",
+        )
+        (self.fusion_dir / "config.yaml").write_text(
+            "scheduler:\n"
+            "  enabled: true\n"
+            "  max_parallel: 3\n"
+            "backends:\n"
+            "  primary: claude\n"
+            "budget:\n"
+            "  global_token_limit: 321\n",
+            encoding="utf-8",
+        )
+
+        kernel = create_kernel(fusion_dir=str(self.fusion_dir))
+
+        self.assertIsNotNone(kernel.scheduler)
+        self.assertTrue(kernel.scheduler.config.enabled)
+        self.assertEqual(kernel.scheduler.config.max_parallel, 3)
+        # default backend should come from config
+        decision = kernel.get_next_batch()
+        self.assertIsNotNone(decision)
+        task_id = decision.batch.task_ids[0]
+        # implementation 类型默认仍路由 codex（即使 primary=claude）
+        self.assertEqual(decision.routing[task_id].backend, "codex")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

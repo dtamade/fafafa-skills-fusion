@@ -13,6 +13,7 @@
 # implementing the Manus "attention manipulation through recitation" pattern.
 
 FUSION_DIR=".fusion"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Fast exit: no fusion directory → not in a workflow
 [ -d "$FUSION_DIR" ] || exit 0
@@ -23,7 +24,7 @@ FUSION_DIR=".fusion"
 # --- Runtime v2.1 adapter ---
 # If runtime is enabled, delegate to Python compat_v2 module.
 if [ -f "$FUSION_DIR/config.yaml" ] && grep -q 'enabled: *true' "$FUSION_DIR/config.yaml" 2>/dev/null; then
-    if python3 -m runtime.compat_v2 pretool "$FUSION_DIR" 2>/dev/null; then
+    if PYTHONPATH="$SCRIPT_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 -m runtime.compat_v2 pretool "$FUSION_DIR" 2>/dev/null; then
         exit 0
     fi
     # Python failed - fall through to Shell logic

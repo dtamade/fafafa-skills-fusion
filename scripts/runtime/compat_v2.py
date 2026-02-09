@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from .state_machine import State, Event, phase_to_state, state_to_phase
 from .kernel import FusionKernel, KernelConfig
 from .session_store import SessionStore
+from .config import load_fusion_config
+from .safe_backlog import generate_safe_backlog, reset_safe_backlog_backoff
 
 
 @dataclass
@@ -49,27 +51,9 @@ class PosttoolResult:
 
 def is_runtime_enabled(fusion_dir: str = ".fusion") -> bool:
     """检查 runtime 是否启用"""
-    config_file = Path(fusion_dir) / "config.yaml"
-    if not config_file.exists():
-        return False
-
     try:
-        content = config_file.read_text(encoding="utf-8")
-        # 简单解析：查找 runtime.enabled 或 enabled: true
-        # 不引入 yaml 依赖，用简单的行级解析
-        in_runtime_section = False
-        for line in content.splitlines():
-            stripped = line.strip()
-            if stripped == "runtime:":
-                in_runtime_section = True
-                continue
-            if in_runtime_section:
-                if not line.startswith(" ") and not line.startswith("\t"):
-                    in_runtime_section = False
-                    continue
-                if "enabled:" in stripped:
-                    return stripped.split(":", 1)[1].strip().lower() == "true"
-        return False
+        cfg = load_fusion_config(fusion_dir)
+        return bool(cfg.get("runtime_enabled", False)) and bool(cfg.get("runtime_compat_mode", True))
     except Exception:
         return False
 
@@ -243,12 +227,40 @@ def _read_scheduler_status(fusion_dir: str) -> Optional[Dict[str, Any]]:
     sessions_file = Path(fusion_dir) / "sessions.json"
     if not sessions_file.exists():
         return None
+
     try:
         with open(sessions_file, "r", encoding="utf-8") as f:
             data = json.load(f)
         return data.get("_runtime", {}).get("scheduler")
     except (json.JSONDecodeError, IOError):
         return None
+
+
+def _compute_stall_score(
+    *,
+    no_progress_rounds: int,
+    pending_like: int,
+    failed_tasks: int,
+    reason: str,
+) -> float:
+    """计算停滞评分（0~1）。"""
+    score = 0.2
+
+    if reason == "task_exhausted":
+        score += 0.45
+    if reason == "no_progress":
+        score += min(0.4, no_progress_rounds * 0.12)
+
+    if pending_like == 0:
+        score += 0.2
+    if failed_tasks > 0:
+        score += min(0.15, failed_tasks * 0.05)
+
+    if score < 0.0:
+        score = 0.0
+    if score > 1.0:
+        score = 1.0
+    return round(score, 4)
 
 
 def adapt_pretool(fusion_dir: str = ".fusion") -> PretoolResult:
@@ -321,10 +333,82 @@ def adapt_posttool(fusion_dir: str = ".fusion") -> PosttoolResult:
 
     counts = _read_task_counts(fusion_dir)
     total = sum(counts.values())
+    pending_like = counts["pending"] + counts["in_progress"]
     current_snap = f"{counts['completed']}:{counts['pending']}:{counts['in_progress']}:{counts['failed']}"
+    cfg = load_fusion_config(fusion_dir)
+    snap_file = Path(fusion_dir) / ".progress_snapshot"
+    unchanged_file = Path(fusion_dir) / ".snapshot_unchanged_count"
+
+    def _inject_safe_backlog(reason: str, no_progress_rounds: int = 0) -> PosttoolResult:
+        project_root = str(Path(fusion_dir).resolve().parent)
+        backlog_result = generate_safe_backlog(
+            fusion_dir=fusion_dir,
+            project_root=project_root,
+        )
+
+        if bool(backlog_result.get("blocked_by_backoff", False)):
+            return PosttoolResult(changed=False, lines=[])
+
+        added = int(backlog_result.get("added", 0))
+        if added <= 0:
+            return PosttoolResult(changed=False, lines=[])
+
+        stall_score = _compute_stall_score(
+            no_progress_rounds=no_progress_rounds,
+            pending_like=pending_like,
+            failed_tasks=counts["failed"],
+            reason=reason,
+        )
+
+        store.append_event(
+            event_type="SAFE_BACKLOG_INJECTED",
+            from_state=str(snapshot.get("current_phase") or "EXECUTE"),
+            to_state=str(snapshot.get("current_phase") or "EXECUTE"),
+            payload={
+                "reason": reason,
+                "stall_score": stall_score,
+                "added": added,
+                "tasks": backlog_result.get("tasks", []),
+            },
+            idempotency_key=f"safe_backlog:{reason}:{current_snap}:{added}",
+        )
+        try:
+            current_state = phase_to_state(str(snapshot.get("current_phase") or "EXECUTE"))
+            store.sync_snapshot(current_state)
+        except Exception:
+            pass
+
+        latest_counts = _read_task_counts(fusion_dir)
+        latest_snap = (
+            f"{latest_counts['completed']}:{latest_counts['pending']}:"
+            f"{latest_counts['in_progress']}:{latest_counts['failed']}"
+        )
+        try:
+            snap_file.write_text(latest_snap, encoding="utf-8")
+        except IOError:
+            pass
+
+        return PosttoolResult(
+            changed=True,
+            lines=[f"[fusion] Safe backlog injected: +{added} task(s)"],
+        )
+
+    # 任务耗尽触发（无 pending/in_progress）
+    if (
+        bool(cfg.get("safe_backlog_enabled", False))
+        and bool(cfg.get("safe_backlog_inject_on_task_exhausted", True))
+        and total > 0
+        and pending_like == 0
+    ):
+        exhausted_result = _inject_safe_backlog("task_exhausted", no_progress_rounds=0)
+        if exhausted_result.changed:
+            try:
+                (Path(fusion_dir) / ".snapshot_unchanged_count").write_text("0", encoding="utf-8")
+            except IOError:
+                pass
+            return exhausted_result
 
     # 读取前一个快照
-    snap_file = Path(fusion_dir) / ".progress_snapshot"
     prev_snap = ""
     if snap_file.exists():
         try:
@@ -339,10 +423,42 @@ def adapt_posttool(fusion_dir: str = ".fusion") -> PosttoolResult:
         pass
 
     if current_snap == prev_snap:
+        unchanged = 0
+        if unchanged_file.exists():
+            try:
+                unchanged = int(unchanged_file.read_text(encoding="utf-8").strip() or "0")
+            except (IOError, ValueError):
+                unchanged = 0
+
+        unchanged += 1
+        try:
+            unchanged_file.write_text(str(unchanged), encoding="utf-8")
+        except IOError:
+            pass
+
+        trigger_rounds = int(cfg.get("safe_backlog_trigger_no_progress_rounds", 3))
+        if trigger_rounds < 1:
+            trigger_rounds = 1
+
+        if unchanged >= trigger_rounds and bool(cfg.get("safe_backlog_enabled", False)):
+            injected = _inject_safe_backlog("no_progress", no_progress_rounds=unchanged)
+            if injected.changed:
+                try:
+                    unchanged_file.write_text("0", encoding="utf-8")
+                except IOError:
+                    pass
+                return injected
+
         return PosttoolResult(changed=False, lines=[])
 
     # 解析变化
     lines = []
+    # 有真实进展时重置 safe_backlog backoff
+    reset_safe_backlog_backoff(fusion_dir)
+    try:
+        unchanged_file.write_text("0", encoding="utf-8")
+    except IOError:
+        pass
     prev_parts = prev_snap.split(":") if prev_snap else ["0", "0", "0", "0"]
     try:
         prev_completed = int(prev_parts[0])

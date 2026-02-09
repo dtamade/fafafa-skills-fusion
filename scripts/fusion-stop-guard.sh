@@ -21,6 +21,7 @@ set -euo pipefail
 
 FUSION_DIR=".fusion"
 LOCK_STALE_SECONDS=300     # Consider lock stale after 5 minutes
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Use the same state lock as pause/cancel/resume for unified protection
 STATE_LOCK="${FUSION_DIR}/.state.lock"
@@ -33,7 +34,6 @@ HOOK_INPUT=$(cat)
 
 # Source LoopGuardian for intelligent loop protection
 # IMPORTANT: Guardian requires jq. If not available, use simple block count fallback.
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -f "$SCRIPT_DIR/loop-guardian.sh" ] && command -v jq &>/dev/null; then
     # shellcheck source=loop-guardian.sh
     source "$SCRIPT_DIR/loop-guardian.sh"
@@ -254,7 +254,7 @@ main() {
     # Falls back to Shell logic if Python call fails.
     if [ -f "$FUSION_DIR/config.yaml" ] && grep -q 'enabled: *true' "$FUSION_DIR/config.yaml" 2>/dev/null; then
         local runtime_output
-        if runtime_output=$(python3 -m runtime.compat_v2 stop-guard "$FUSION_DIR" 2>/dev/null); then
+        if runtime_output=$(PYTHONPATH="$SCRIPT_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 -m runtime.compat_v2 stop-guard "$FUSION_DIR" 2>/dev/null); then
             # Python succeeded - use its output
             local decision
             decision=$(echo "$runtime_output" | python3 -c "import sys,json; print(json.load(sys.stdin).get('decision','allow'))" 2>/dev/null || echo "allow")

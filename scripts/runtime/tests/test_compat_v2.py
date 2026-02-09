@@ -66,6 +66,11 @@ class TestIsRuntimeEnabled(BaseTestCase):
             f.write("backends:\n  primary: codex\n")
         self.assertFalse(is_runtime_enabled(str(self.fusion_dir)))
 
+    def test_runtime_enabled_requires_compat_mode(self):
+        with open(self.fusion_dir / "config.yaml", "w", encoding="utf-8") as f:
+            f.write("runtime:\n  enabled: true\n  compat_mode: false\n")
+        self.assertFalse(is_runtime_enabled(str(self.fusion_dir)))
+
 
 class TestAdaptStopGuard(BaseTestCase):
     """stop-guard 适配"""
@@ -273,6 +278,122 @@ class TestAdaptPosttool(BaseTestCase):
         result = adapt_posttool(str(self.fusion_dir))
         self.assertFalse(result.changed)
         self.assertEqual(result.lines, [])
+
+    def test_no_progress_triggers_safe_backlog(self):
+        """连续无进展达到阈值时触发 safe_backlog"""
+        self._write_sessions({"status": "in_progress", "current_phase": "EXECUTE"})
+        self._write_task_plan("### Task 1: A [PENDING]\n")
+
+        with open(self.fusion_dir / "config.yaml", "w", encoding="utf-8") as f:
+            f.write(
+                "runtime:\n"
+                "  enabled: true\n"
+                "  compat_mode: true\n"
+                "safe_backlog:\n"
+                "  enabled: true\n"
+                "  trigger_no_progress_rounds: 2\n"
+                "  max_tasks_per_run: 1\n"
+                "  allowed_categories: documentation\n"
+            )
+
+        project_root = self.fusion_dir.parent
+        (project_root / "README.md").write_text("# Demo\n", encoding="utf-8")
+        (self.fusion_dir / ".progress_snapshot").write_text("0:1:0:0", encoding="utf-8")
+
+        first = adapt_posttool(str(self.fusion_dir))
+        self.assertFalse(first.changed)
+
+        second = adapt_posttool(str(self.fusion_dir))
+        self.assertTrue(second.changed)
+        self.assertTrue(any("safe backlog" in line.lower() for line in second.lines))
+
+        task_plan = (self.fusion_dir / "task_plan.md").read_text(encoding="utf-8")
+        self.assertIn("[SAFE_BACKLOG]", task_plan)
+
+        events_file = self.fusion_dir / "events.jsonl"
+        self.assertTrue(events_file.exists())
+        events = [json.loads(line) for line in events_file.read_text(encoding="utf-8").splitlines() if line.strip()]
+        matching = [evt for evt in events if evt.get("type") == "SAFE_BACKLOG_INJECTED"]
+        self.assertTrue(matching)
+        payload = matching[-1].get("payload", {})
+        self.assertEqual(payload.get("reason"), "no_progress")
+        self.assertIn("stall_score", payload)
+        self.assertGreaterEqual(float(payload.get("stall_score")), 0.0)
+
+    def test_task_exhausted_triggers_safe_backlog(self):
+        """任务耗尽（无 pending/in_progress）时触发托底注入"""
+        self._write_sessions({"status": "in_progress", "current_phase": "EXECUTE"})
+        self._write_task_plan("### Task 1: A [COMPLETED]\n")
+
+        with open(self.fusion_dir / "config.yaml", "w", encoding="utf-8") as f:
+            f.write(
+                "runtime:\n"
+                "  enabled: true\n"
+                "  compat_mode: true\n"
+                "safe_backlog:\n"
+                "  enabled: true\n"
+                "  inject_on_task_exhausted: true\n"
+                "  max_tasks_per_run: 1\n"
+                "  allowed_categories: documentation\n"
+            )
+
+        project_root = self.fusion_dir.parent
+        (project_root / "README.md").write_text("# Demo\n", encoding="utf-8")
+
+        result = adapt_posttool(str(self.fusion_dir))
+        self.assertTrue(result.changed)
+        self.assertTrue(any("safe backlog" in line.lower() for line in result.lines))
+
+        task_plan = (self.fusion_dir / "task_plan.md").read_text(encoding="utf-8")
+        self.assertIn("[SAFE_BACKLOG]", task_plan)
+
+        events_file = self.fusion_dir / "events.jsonl"
+        self.assertTrue(events_file.exists())
+        events = [json.loads(line) for line in events_file.read_text(encoding="utf-8").splitlines() if line.strip()]
+        matching = [evt for evt in events if evt.get("type") == "SAFE_BACKLOG_INJECTED"]
+        self.assertTrue(matching)
+        payload = matching[-1].get("payload", {})
+        self.assertEqual(payload.get("reason"), "task_exhausted")
+        self.assertIn("stall_score", payload)
+
+    def test_backoff_blocks_immediate_reinjection(self):
+        """指数退避冷却期间不应重复注入，冷却后才允许"""
+        self._write_sessions({"status": "in_progress", "current_phase": "EXECUTE"})
+        self._write_task_plan("### Task 1: A [PENDING]\n")
+
+        with open(self.fusion_dir / "config.yaml", "w", encoding="utf-8") as f:
+            f.write(
+                "runtime:\n"
+                "  enabled: true\n"
+                "  compat_mode: true\n"
+                "safe_backlog:\n"
+                "  enabled: true\n"
+                "  trigger_no_progress_rounds: 1\n"
+                "  max_tasks_per_run: 1\n"
+                "  allowed_categories: quality,documentation\n"
+                "  backoff_enabled: true\n"
+                "  backoff_base_rounds: 2\n"
+                "  backoff_max_rounds: 8\n"
+                "  backoff_jitter: 0\n"
+                "  backoff_force_probe_rounds: 50\n"
+            )
+
+        project_root = self.fusion_dir.parent
+        (project_root / "README.md").write_text("# Demo\n", encoding="utf-8")
+        (project_root / "scripts/runtime/tests").mkdir(parents=True, exist_ok=True)
+        (self.fusion_dir / ".progress_snapshot").write_text("0:1:0:0", encoding="utf-8")
+
+        first = adapt_posttool(str(self.fusion_dir))
+        self.assertTrue(first.changed)
+
+        second = adapt_posttool(str(self.fusion_dir))
+        self.assertFalse(second.changed)
+
+        third = adapt_posttool(str(self.fusion_dir))
+        self.assertFalse(third.changed)
+
+        fourth = adapt_posttool(str(self.fusion_dir))
+        self.assertTrue(fourth.changed)
 
 
 class TestRuntimeToggle(BaseTestCase):

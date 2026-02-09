@@ -112,14 +112,19 @@ else:
     sys.exit(1)
 PYEOF
 
+    # 执行 UNDERSTAND 阶段（最小执行器）：评分 + 写 findings + 事件推进
+    PYTHONPATH="$SCRIPT_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 -m runtime.understand "$GOAL" \
+        --fusion-dir "$ORIGINAL_DIR/.fusion" \
+        --project-root "$ORIGINAL_DIR" || true
+
     echo ""
-    echo "[FUSION] Workflow initialized. Begin Phase 0: UNDERSTAND."
+    echo "[FUSION] Workflow initialized. UNDERSTAND completed."
     echo ""
     echo "Next steps:"
-    echo "1. Silent scan: Detect tech stack, project structure"
-    echo "2. Score goal clarity (0-10)"
-    echo "3. If score < 7: Ask clarifying questions (max 2 rounds)"
-    echo "4. Display understanding summary for user confirmation"
+    echo "1. Phase 1: INITIALIZE"
+    echo "2. Phase 2: ANALYZE"
+    echo "3. Phase 3: DECOMPOSE"
+    echo "4. Phase 4: EXECUTE"
 fi
 
 # 4. 输出 goal 摘要

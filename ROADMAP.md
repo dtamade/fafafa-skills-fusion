@@ -187,7 +187,17 @@ docs/
 
 - [x] **Week 4**: v2.1.0 发布 (状态机内核) ✅ 2026-02-09
 - [x] **Week 8**: v2.5.0 发布 (并行调度 + Token/时延治理) ✅ 2026-02-09
+- [x] **Week 8.5**: v2.6.0 收尾发布（启动闭环 + UNDERSTAND + 桥接） ✅ 2026-02-09
 - [ ] **Week 12**: v3.0.0 GA 发布
+
+### v2.6.0 收尾发布清单（已完成）
+
+- ✅ Hook Runtime 模块路径断层修复（外部 cwd 可用）
+- ✅ UNDERSTAND 阶段最小执行器落地并接入 `fusion-start.sh`
+- ✅ `codeagent-wrapper` 桥接脚本落地（主后端+回退+会话持久化）
+- ✅ `create_kernel()` 自动读取 `scheduler/budget/backend` 配置接线
+- ✅ `fusion-status.sh` 增加 runtime/scheduler 可观测摘要
+- ✅ 全量测试 283/283 通过
 
 ---
 

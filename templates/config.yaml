@@ -17,6 +17,12 @@ parallel:
   conflict_check: true     # 检查文件冲突
   fail_fast: false         # 一个失败是否停止所有
 
+# Runtime 配置
+runtime:
+  enabled: true
+  compat_mode: true
+  version: "2.5.0"
+
 # TDD 配置
 tdd:
   enabled: true
@@ -51,9 +57,29 @@ loop_guardian:
   max_wall_time_ms: 7200000  # 最大执行时间 (2小时)
   backoff_threshold: 3     # 进入 BACKOFF 的无进展轮数
 
+# Safe Backlog 配置（长周期自治托底）
+# 默认使用「平衡档（Recommended）」：
+# - 兼顾防停摆与低打扰
+# - 适用于大多数长期自治工作流
+safe_backlog:
+  enabled: true
+  trigger_no_progress_rounds: 3   # Recommended (Balance)
+  inject_on_task_exhausted: true
+  max_tasks_per_run: 2            # Recommended (Balance)
+  allowed_categories: "quality,documentation,optimization"
+  diversity_rotation: true
+  novelty_window: 12              # Recommended (Balance)
+  backoff_enabled: true
+  backoff_base_rounds: 1          # Recommended (Balance)
+  backoff_max_rounds: 32          # Recommended (Balance)
+  backoff_jitter: 0.2             # Recommended (Balance)
+  backoff_force_probe_rounds: 20  # Recommended (Balance)
+  max_files_touched: 4
+  max_lines_changed: 200
+
 # v2.5.0 调度器配置
 scheduler:
-  enabled: false           # 默认关闭，退化为 v2.1.0 串行
+  enabled: true            # 默认开启，可按需关闭回退串行
   max_parallel: 2          # 最大并行任务数
   fail_fast: false         # 一个失败是否停止全部
 

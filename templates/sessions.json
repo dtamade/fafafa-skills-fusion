@@ -5,6 +5,7 @@
   "status": "not_started",
   "current_phase": null,
   "codex_session": null,
+  "claude_session": null,
   "tasks": {},
   "strikes": {
     "current_task": null,

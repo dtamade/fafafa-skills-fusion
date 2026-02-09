@@ -4,6 +4,65 @@ All notable changes to Fusion Skill will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [v2.6.0] - 2026-02-09
+
+> 收尾发布版本：启动闭环、UNDERSTAND 执行器、运行时配置统一、脚本可观测性增强
+
+### Added
+
+- **统一配置加载器**: `scripts/runtime/config.py`
+  - 统一读取 `.fusion/config.yaml`
+  - 支持 PyYAML 与轻量 fallback 解析
+- **Safe Backlog 托底系统（防停摆）**
+  - 新模块：`scripts/runtime/safe_backlog.py`
+  - 支持 `quality/documentation/optimization` 三类低风险任务自动发现
+  - 任务注入写入 `task_plan.md`，并打上 `[SAFE_BACKLOG]`
+  - 状态持久化到 `.fusion/safe_backlog.json`
+  - 注入事件写入 `events.jsonl`：`SAFE_BACKLOG_INJECTED`
+- **托底反机械与统计化调度**
+  - 类别轮转（diversity rotation）
+  - 新颖窗口去重（novelty window）
+  - 候选优先级评分（`priority_score`）
+  - 停滞评分（`stall_score`）
+- **指数退避（Exponential Backoff）托底控制**
+  - 冷却参数：`backoff_base_rounds/backoff_max_rounds/backoff_jitter`
+  - 强制探测：`backoff_force_probe_rounds`
+  - 真实进展时自动复位 backoff
+- **UNDERSTAND 最小执行器**: `scripts/runtime/understand.py`
+  - 启动后自动评分、上下文扫描、写入 `findings.md`
+  - 自动派发 `UNDERSTAND_DONE` 推进到 `INITIALIZE`
+- **codeagent-wrapper 桥接脚本**: `scripts/fusion-codeagent.sh`
+  - 支持主后端调用、失败回退、会话 ID 落盘
+  - 区分 `codex_session` / `claude_session`
+- **脚本级回归测试**
+  - `scripts/runtime/tests/test_fusion_codeagent_script.py`
+  - `scripts/runtime/tests/test_fusion_status_script.py`
+  - `scripts/runtime/tests/test_understand.py`
+  - `scripts/runtime/tests/test_config_loader.py`
+
+### Changed
+
+- **Hook Runtime 路径修复**
+  - `fusion-pretool.sh` / `fusion-posttool.sh` / `fusion-stop-guard.sh`
+  - 统一注入 `PYTHONPATH=$SCRIPT_DIR`，避免从外部 cwd 调用时模块不可达
+- **Kernel 自动调度器接线**
+  - `create_kernel()` 自动读取 scheduler/budget/backend 配置并初始化
+  - `init_scheduler()` 支持 `default_backend`
+- **初始化配置升级**
+  - `fusion-init.sh` 生成 `runtime/scheduler/budget` 配置段
+  - `templates/config.yaml` 默认开启 `runtime` 与 `scheduler`
+- **状态查看增强**
+  - `fusion-status.sh` 增加 runtime/scheduler 摘要输出
+  - `fusion-status.sh` 增加 safe backlog 最近注入摘要
+    - `safe_backlog.last_added`
+    - `safe_backlog.last_injected_at`
+    - `safe_backlog.last_injected_at_iso`
+
+### Verification
+
+- 全量测试：`283 passed`
+- 关键新增回归覆盖：Hook 路径、UNDERSTAND 执行、配置解析、codeagent 桥接、status 输出
+
 ## [v2.5.0] - 2026-02-09
 
 > Phase 2: 并行调度 + Token/时延治理 — 从串行升级为可控并行

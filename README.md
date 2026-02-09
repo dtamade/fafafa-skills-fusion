@@ -1,156 +1,149 @@
 # Fusion Skill
 
-**自主工作流 Skill** - 给目标后自主执行，只在必要时打扰用户。
+English | [简体中文](README.zh-CN.md)
 
-## 特性
+Fusion is an autonomous development workflow skill for Codex/Claude-style agents.
+Give it a goal, and it plans, executes, verifies, and reports with minimal interruptions.
 
-- 🤖 **自主执行** - 给定目标后自动完成，无需频繁确认
-- 🧪 **TDD 驱动** - 强制测试驱动开发流程
-- 🔄 **智能降级** - 3-Strike 错误协议，自动降级到备用方案
-- 📊 **进度追踪** - 持久化进度到文件，随时可恢复
-- 🌳 **Git 集成** - 自动分支管理和提交
-- ⚡ **并行执行** - 独立任务并行处理
+## Why Fusion
 
-## 快速开始
+- **Autonomous execution**: keeps moving without constant human confirmation.
+- **TDD-first loop**: enforces `RED -> GREEN -> REFACTOR` for implementation work.
+- **Resilience built in**: 3-strike recovery and backend fallback.
+- **Runtime observability**: state is persisted in `.fusion/` and can be resumed.
+- **Safe fallback mode**: injects low-risk quality/docs/optimization work when the main loop stalls.
+
+## Workflow
+
+```text
+UNDERSTAND -> INITIALIZE -> ANALYZE -> DECOMPOSE -> EXECUTE -> VERIFY -> REVIEW -> COMMIT -> DELIVER
+```
+
+## Quick Start
+
+### Start a workflow
 
 ```bash
-/fusion "实现用户认证系统"
+/fusion "implement user authentication"
 ```
 
-Fusion 会自动：
-1. 分析代码库上下文
-2. 拆分为可执行的子任务
-3. 按 TDD 流程逐个实现
-4. 自动 commit 每个完成的任务
-5. 最终汇报结果
+Fusion will:
 
-## 命令
+1. Analyze repository context.
+2. Decompose the goal into atomic tasks.
+3. Execute tasks with TDD or direct mode (by task type).
+4. Persist progress to `.fusion/`.
+5. Deliver a final summary.
 
-| 命令 | 描述 |
-|------|------|
-| `/fusion "<目标>"` | 启动自主工作流 |
-| `/fusion status` | 查看当前进度 |
-| `/fusion resume` | 恢复中断的任务 |
-| `/fusion pause` | 暂停执行 |
-| `/fusion cancel` | 取消任务 |
-| `/fusion logs` | 查看详细日志 |
+### Useful commands
 
-## 工作流
+| Command | Description |
+| --- | --- |
+| `/fusion "<goal>"` | Start autonomous workflow |
+| `/fusion status` | Show runtime state and progress |
+| `/fusion resume` | Resume interrupted workflow |
+| `/fusion pause` | Pause current run |
+| `/fusion cancel` | Cancel current run |
+| `/fusion logs` | View execution logs |
 
-```
-INITIALIZE → ANALYZE → DECOMPOSE → EXECUTE → VERIFY → REVIEW → COMMIT → DELIVER
-                          ↓
-                   TDD 循环:
-                   RED → GREEN → REFACTOR
-```
+### Script fallback (if slash commands are unavailable)
 
-## 文档
-
-| 文档 | 描述 |
-|------|------|
-| [SKILL.md](SKILL.md) | 主技能文件 |
-| [EXECUTION_PROTOCOL.md](EXECUTION_PROTOCOL.md) | 详细执行协议 |
-| [PARALLEL_EXECUTION.md](PARALLEL_EXECUTION.md) | 并行执行策略 |
-| [SESSION_RECOVERY.md](SESSION_RECOVERY.md) | 会话恢复机制 |
-| [DESIGN.md](DESIGN.md) | 设计文档 |
-
-## 文件结构
-
-```
-fafafa-skills-fusion/
-├── SKILL.md                    # 主技能入口
-├── EXECUTION_PROTOCOL.md       # 执行协议
-├── PARALLEL_EXECUTION.md       # 并行执行
-├── SESSION_RECOVERY.md         # 会话恢复
-├── DESIGN.md                   # 设计文档
-├── README.md                   # 本文件
-├── templates/                  # 文件模板
-│   ├── task_plan.md
-│   ├── progress.md
-│   ├── findings.md
-│   ├── sessions.json
-│   └── config.yaml
-├── scripts/                    # 辅助脚本
-│   ├── fusion-init.sh
-│   ├── fusion-status.sh
-│   ├── fusion-resume.sh
-│   ├── fusion-stop-guard.sh
-│   ├── fusion-pause.sh
-│   ├── fusion-cancel.sh
-│   ├── fusion-logs.sh
-│   ├── fusion-continue.sh
-│   └── fusion-git.sh
-└── prompts/                    # Codex/Claude prompts
-    ├── decompose.md
-    ├── tdd.md
-    ├── error_recovery.md
-    ├── code_review.md
-    ├── commit_message.md
-    └── two_phase_review.md
+```bash
+bash scripts/fusion-start.sh "implement user authentication"
+bash scripts/fusion-status.sh
 ```
 
-## 运行时目录
+## Safe Backlog (Anti-Stall)
 
-Fusion 在项目根目录创建 `.fusion/` 存储工作状态：
+Fusion includes a long-running fallback system to prevent dead loops:
 
-```
-.fusion/
-├── task_plan.md      # 当前任务计划
-├── progress.md       # 进度时间线
-├── findings.md       # 研究发现
-├── sessions.json     # 会话状态
-└── config.yaml       # 运行时配置
-```
+- Triggers on **no progress rounds** or **task exhaustion**.
+- Discovers low-risk tasks in three categories:
+  - `quality`
+  - `documentation`
+  - `optimization`
+- Uses anti-mechanical orchestration:
+  - category rotation,
+  - novelty window,
+  - priority scoring.
+- Uses exponential backoff controls:
+  - `backoff_base_rounds`,
+  - `backoff_max_rounds`,
+  - `backoff_jitter`,
+  - `backoff_force_probe_rounds`.
 
-## 配置
+Observe fallback events via:
 
-编辑 `.fusion/config.yaml`：
+- `/fusion status` (`safe_backlog.last_*`)
+- `.fusion/events.jsonl` (`SAFE_BACKLOG_INJECTED` with `reason` and `stall_score`)
+
+## Configuration
+
+Edit `.fusion/config.yaml`:
 
 ```yaml
-backends:
-  primary: codex
-  fallback: claude
-
-execution:
-  parallel: 2
-  timeout: 7200000
-
-tdd:
+runtime:
   enabled: true
+  compat_mode: true
 
-git:
+safe_backlog:
   enabled: true
-  branch_prefix: "fusion/"
+  trigger_no_progress_rounds: 3
+  inject_on_task_exhausted: true
+  max_tasks_per_run: 2
+  allowed_categories: "quality,documentation,optimization"
+  diversity_rotation: true
+  novelty_window: 12
+  backoff_enabled: true
+  backoff_base_rounds: 1
+  backoff_max_rounds: 32
+  backoff_jitter: 0.2
+  backoff_force_probe_rounds: 20
 ```
 
-## 3-Strike 错误协议
+See `templates/config.yaml` for the full recommended baseline.
 
+## Project Docs
+
+- [`SKILL.md`](SKILL.md): skill spec and execution protocol
+- [`EXECUTION_PROTOCOL.md`](EXECUTION_PROTOCOL.md): detailed phase rules
+- [`PARALLEL_EXECUTION.md`](PARALLEL_EXECUTION.md): parallel scheduling strategy
+- [`SESSION_RECOVERY.md`](SESSION_RECOVERY.md): resume and recovery behavior
+- [`CHANGELOG.md`](CHANGELOG.md): release history
+
+## Development
+
+Run tests:
+
+```bash
+pytest -q
 ```
-Strike 1: Codex 针对性修复
-Strike 2: Codex 换实现方案
-Strike 3: 降级到 Claude 本地
-3 Strikes: 询问用户
+
+Targeted runtime regression set:
+
+```bash
+pytest -q \
+  scripts/runtime/tests/test_safe_backlog.py \
+  scripts/runtime/tests/test_compat_v2.py \
+  scripts/runtime/tests/test_hook_shell_runtime_path.py
 ```
 
-## 融合来源
+## Contributing
 
-| 来源 | 融入特性 |
-|------|----------|
-| codex skill | HEREDOC 语法、SESSION_ID、并行执行 |
-| planning-with-files | 文件持久化、3-Strike 协议 |
-| subagent-driven | 两阶段审查模式 |
-| superpowers TDD | 红-绿-重构循环 |
-| ccg workflow | 多阶段工作流（简化版）|
+Please read:
 
-## 与 ccg 的区别
+- [Contributing Guide (EN)](CONTRIBUTING.md)
+- [贡献指南 (ZH)](CONTRIBUTING.zh-CN.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Security Policy](SECURITY.md)
 
-| 特性 | ccg | Fusion |
-|------|-----|--------|
-| Gemini 依赖 | ❌ 必须 | ✅ 不需要 |
-| 用户确认 | ❌ 每阶段 | ✅ 只在阻塞时 |
-| 自动降级 | ❌ 无 | ✅ 3-Strike |
-| 会话恢复 | ⚠️ 手动 | ✅ 自动 |
+## Maintainer & Community
+
+- Maintainer: **dtamade**
+- Studio: **fafafa studio**
+- Email: `dtamade@gmail.com`
+- QQ Group (CN): `685403987`
 
 ## License
 
-MIT
+This project is licensed under the [MIT License](LICENSE).

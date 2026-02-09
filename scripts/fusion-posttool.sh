@@ -12,6 +12,7 @@
 
 FUSION_DIR=".fusion"
 SNAPSHOT_FILE="$FUSION_DIR/.progress_snapshot"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Fast exit: no fusion directory
 [ -d "$FUSION_DIR" ] || exit 0
@@ -22,14 +23,13 @@ SNAPSHOT_FILE="$FUSION_DIR/.progress_snapshot"
 # Also trigger state machine events for task transitions.
 if [ -f "$FUSION_DIR/config.yaml" ] && grep -q 'enabled: *true' "$FUSION_DIR/config.yaml" 2>/dev/null; then
     # Get posttool output
-    if OUTPUT=$(python3 -m runtime.compat_v2 posttool "$FUSION_DIR" 2>/dev/null); then
+    if OUTPUT=$(PYTHONPATH="$SCRIPT_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 -m runtime.compat_v2 posttool "$FUSION_DIR" 2>/dev/null); then
         echo "$OUTPUT"
     fi
     # Trigger state machine events based on task state changes
     # This is done regardless of posttool output success
-    python3 << 'PYEOF' 2>/dev/null || true
+    PYTHONPATH="$SCRIPT_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 << 'PYEOF' 2>/dev/null || true
 import sys
-sys.path.insert(0, "scripts")
 from pathlib import Path
 from runtime.kernel import create_kernel
 from runtime.state_machine import Event, State

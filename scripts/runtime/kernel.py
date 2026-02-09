@@ -24,6 +24,7 @@ from .scheduler import Scheduler, SchedulerConfig, ScheduleDecision
 from .conflict_detector import ConflictDetector
 from .budget_manager import BudgetManager, BudgetConfig
 from .router import Router
+from .config import load_fusion_config
 
 
 @dataclass
@@ -292,6 +293,7 @@ class FusionKernel:
         self,
         scheduler_config: Optional[SchedulerConfig] = None,
         budget_config: Optional[BudgetConfig] = None,
+        default_backend: str = "codex",
     ) -> Optional[Scheduler]:
         """
         从 task_plan.md 初始化 Scheduler。
@@ -313,7 +315,7 @@ class FusionKernel:
 
         config = scheduler_config or SchedulerConfig()
         budget = BudgetManager(budget_config) if budget_config else BudgetManager()
-        router = Router(budget_manager=budget)
+        router = Router(budget_manager=budget, default_backend=default_backend)
         conflict = ConflictDetector()
 
         self._scheduler = Scheduler(
@@ -477,7 +479,40 @@ class FusionKernel:
 
 
 def create_kernel(fusion_dir: str = ".fusion") -> FusionKernel:
-    """创建并初始化内核实例"""
+    """
+    创建并初始化内核实例。
+
+    行为：
+    1. 加载 sessions 快照状态
+    2. 按 config.yaml 自动初始化 scheduler/budget（若 task_plan.md 存在）
+    """
     kernel = FusionKernel(fusion_dir=fusion_dir)
     kernel.load_state()
+
+    # 自动接入 v2.5.0 调度器配置（故障安全，不阻塞调用方）
+    try:
+        cfg = load_fusion_config(fusion_dir)
+        max_parallel = int(cfg.get("scheduler_max_parallel", 2))
+        if max_parallel < 1:
+            max_parallel = 1
+
+        scheduler_config = SchedulerConfig(
+            enabled=bool(cfg.get("scheduler_enabled", False)),
+            max_parallel=max_parallel,
+            fail_fast=bool(cfg.get("scheduler_fail_fast", False)),
+        )
+        budget_config = BudgetConfig(
+            global_token_limit=int(cfg.get("budget_global_token_limit", 100_000)),
+            global_latency_limit_ms=int(cfg.get("budget_global_latency_limit_ms", 7_200_000)),
+            warning_threshold=float(cfg.get("budget_warning_threshold", 0.8)),
+            hard_limit_action=str(cfg.get("budget_hard_limit_action", "serial")),
+        )
+        kernel.init_scheduler(
+            scheduler_config=scheduler_config,
+            budget_config=budget_config,
+            default_backend=str(cfg.get("backend_primary", "codex")),
+        )
+    except Exception:
+        pass
+
     return kernel
