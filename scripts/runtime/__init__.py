@@ -27,6 +27,34 @@ from .kernel import (
     create_kernel,
 )
 
+from .task_graph import (
+    TaskNode,
+    Batch,
+    TaskGraph,
+)
+
+from .conflict_detector import (
+    ConflictDetector,
+    ConflictResult,
+)
+
+from .budget_manager import (
+    BudgetManager,
+    BudgetConfig,
+    BudgetStatus,
+)
+
+from .router import (
+    Router,
+    RouteDecision,
+)
+
+from .scheduler import (
+    Scheduler,
+    SchedulerConfig,
+    ScheduleDecision,
+)
+
 __version__ = "2.1.0"
 __all__ = [
     # State Machine
@@ -48,4 +76,22 @@ __all__ = [
     "KernelConfig",
     "TransitionResult",
     "create_kernel",
+    # Task Graph (v2.5.0)
+    "TaskNode",
+    "Batch",
+    "TaskGraph",
+    # Conflict Detector (v2.5.0)
+    "ConflictDetector",
+    "ConflictResult",
+    # Budget Manager (v2.5.0)
+    "BudgetManager",
+    "BudgetConfig",
+    "BudgetStatus",
+    # Router (v2.5.0)
+    "Router",
+    "RouteDecision",
+    # Scheduler (v2.5.0)
+    "Scheduler",
+    "SchedulerConfig",
+    "ScheduleDecision",
 ]

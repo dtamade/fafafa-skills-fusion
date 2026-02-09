@@ -50,3 +50,16 @@ loop_guardian:
   max_state_visits: 8      # 单状态访问上限
   max_wall_time_ms: 7200000  # 最大执行时间 (2小时)
   backoff_threshold: 3     # 进入 BACKOFF 的无进展轮数
+
+# v2.5.0 调度器配置
+scheduler:
+  enabled: false           # 默认关闭，退化为 v2.1.0 串行
+  max_parallel: 2          # 最大并行任务数
+  fail_fast: false         # 一个失败是否停止全部
+
+# v2.5.0 预算配置
+budget:
+  global_token_limit: 100000     # 全局 token 上限
+  global_latency_limit_ms: 7200000  # 全局时延上限 (2小时)
+  warning_threshold: 0.8         # 80% 时预警
+  hard_limit_action: "serial"    # serial | pause | skip
