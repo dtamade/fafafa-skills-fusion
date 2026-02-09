@@ -84,6 +84,12 @@ class StateMachineContext:
     tests_passed: bool = False
     review_passed: bool = False
 
+    # v2.5.0 调度器相关
+    scheduler_enabled: bool = False
+    current_batch_id: int = 0
+    parallel_tasks: int = 0
+    total_batches: int = 0
+
     def has_pending_tasks(self) -> bool:
         return self.pending_tasks > 0
 

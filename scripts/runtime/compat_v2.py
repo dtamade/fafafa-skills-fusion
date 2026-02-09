@@ -238,6 +238,19 @@ Only ask user if 3-Strike exhausted."""
     )
 
 
+def _read_scheduler_status(fusion_dir: str) -> Optional[Dict[str, Any]]:
+    """从 sessions.json 读取调度器状态（如果存在）"""
+    sessions_file = Path(fusion_dir) / "sessions.json"
+    if not sessions_file.exists():
+        return None
+    try:
+        with open(sessions_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get("_runtime", {}).get("scheduler")
+    except (json.JSONDecodeError, IOError):
+        return None
+
+
 def adapt_pretool(fusion_dir: str = ".fusion") -> PretoolResult:
     """
     适配 fusion-pretool.sh 的逻辑
@@ -282,6 +295,14 @@ def adapt_pretool(fusion_dir: str = ".fusion") -> PretoolResult:
         task_status = "IN_PROGRESS" if counts["in_progress"] > 0 else "PENDING"
         lines.append(f"[fusion] Task {task_index}/{total}: {next_task} [{task_status}]")
         lines.append(f"[fusion] Progress: {bar} {percent}% | Guardian: OK")
+
+    # v2.5.0 调度器批次信息
+    sched_status = _read_scheduler_status(fusion_dir)
+    if sched_status and sched_status.get("enabled"):
+        batch_id = sched_status.get("current_batch_id", 0)
+        parallel = sched_status.get("parallel_tasks", 0)
+        if batch_id > 0 or parallel > 0:
+            lines.append(f"[fusion] Batch: {batch_id} | Parallel: {parallel} tasks")
 
     return PretoolResult(active=True, lines=lines)
 
@@ -345,6 +366,13 @@ def adapt_posttool(fusion_dir: str = ".fusion") -> PosttoolResult:
 
     if failed_delta > 0:
         lines.append("[fusion] Task FAILED. Apply 3-Strike protocol.")
+
+    # v2.5.0 调度器批次完成
+    sched_status = _read_scheduler_status(fusion_dir)
+    if sched_status and sched_status.get("enabled"):
+        batch_id = sched_status.get("current_batch_id", 0)
+        if batch_id > 0 and completed_delta > 0:
+            lines.append(f"[fusion] Batch {batch_id} progress: +{completed_delta} tasks completed")
 
     return PosttoolResult(changed=True, lines=lines)
 

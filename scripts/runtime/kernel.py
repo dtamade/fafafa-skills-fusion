@@ -18,6 +18,11 @@ from .state_machine import (
 )
 from .event_bus import EventBus, Subscription
 from .session_store import SessionStore, StoredEvent
+from .task_graph import TaskGraph, TaskNode
+from .scheduler import Scheduler, SchedulerConfig, ScheduleDecision
+from .conflict_detector import ConflictDetector
+from .budget_manager import BudgetManager, BudgetConfig
+from .router import Router
 
 
 @dataclass
@@ -266,6 +271,131 @@ class FusionKernel:
         except IOError:
             pass
 
+    # ── v2.5.0 Scheduler 集成 ──────────────────────────
+
+    def init_scheduler(
+        self,
+        scheduler_config: Optional[SchedulerConfig] = None,
+        budget_config: Optional[BudgetConfig] = None,
+    ) -> Optional[Scheduler]:
+        """
+        从 task_plan.md 初始化 Scheduler。
+
+        当 scheduler_config.enabled=False 时仍会创建 Scheduler，
+        但 pick_next_batch() 会退化为串行模式。
+
+        Returns:
+            Scheduler 实例，或 None（task_plan.md 不存在时）
+        """
+        task_plan = self.fusion_dir / "task_plan.md"
+        if not task_plan.exists():
+            return None
+
+        try:
+            graph = TaskGraph.from_task_plan(str(task_plan))
+        except Exception:
+            return None
+
+        config = scheduler_config or SchedulerConfig()
+        budget = BudgetManager(budget_config) if budget_config else BudgetManager()
+        router = Router(budget_manager=budget)
+        conflict = ConflictDetector()
+
+        self._scheduler = Scheduler(
+            graph=graph,
+            config=config,
+            conflict_detector=conflict,
+            budget_manager=budget,
+            router=router,
+        )
+
+        # 更新上下文
+        self._context.scheduler_enabled = config.enabled
+
+        return self._scheduler
+
+    @property
+    def scheduler(self) -> Optional[Scheduler]:
+        """当前 Scheduler 实例（可能为 None）"""
+        return getattr(self, '_scheduler', None)
+
+    def get_next_batch(self) -> Optional[ScheduleDecision]:
+        """
+        获取下一批可执行任务。
+
+        委托 Scheduler.pick_next_batch()。
+        如果 Scheduler 未初始化，返回 None。
+        """
+        sched = self.scheduler
+        if sched is None:
+            return None
+        return sched.pick_next_batch()
+
+    def _sync_scheduler_snapshot(self) -> None:
+        """将 scheduler 状态同步到 sessions.json"""
+        sched = self.scheduler
+        if not sched:
+            return
+        try:
+            scheduler_data = {
+                "enabled": sched.config.enabled,
+                "current_batch_id": sched.get_progress().get("batches_done", 0),
+                "parallel_tasks": len(
+                    sched.graph.get_ready_tasks()
+                ) if sched.config.enabled else 0,
+            }
+            # 通过 extra 将 scheduler 数据合并到 _runtime
+            sessions_file = self.fusion_dir / "sessions.json"
+            if sessions_file.exists():
+                import json as _json
+                with open(sessions_file, "r", encoding="utf-8") as f:
+                    data = _json.load(f)
+                runtime = data.get("_runtime", {})
+                runtime["scheduler"] = scheduler_data
+                data["_runtime"] = runtime
+                with open(sessions_file, "w", encoding="utf-8") as f:
+                    _json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass  # 故障安全
+
+    def complete_task(
+        self,
+        task_id: str,
+        tokens_used: int = 0,
+        latency_ms: int = 0,
+    ) -> None:
+        """
+        标记任务完成并更新 Scheduler 状态。
+
+        同时更新 Context 的任务计数。
+        """
+        sched = self.scheduler
+        if sched:
+            sched.on_task_done(task_id, tokens_used, latency_ms)
+            # 同步上下文
+            progress = sched.get_progress()
+            self._context.completed_tasks = progress["completed"]
+            self._context.pending_tasks = progress["pending"]
+            self._context.failed_tasks = progress["failed"]
+            self._context.current_batch_id = progress.get("batches_done", 0)
+            self._sync_scheduler_snapshot()
+
+    def fail_task(
+        self,
+        task_id: str,
+        tokens_used: int = 0,
+        latency_ms: int = 0,
+    ) -> None:
+        """标记任务失败并更新 Scheduler 状态。"""
+        sched = self.scheduler
+        if sched:
+            sched.on_task_failed(task_id, tokens_used, latency_ms)
+            progress = sched.get_progress()
+            self._context.completed_tasks = progress["completed"]
+            self._context.pending_tasks = progress["pending"]
+            self._context.failed_tasks = progress["failed"]
+            self._sync_scheduler_snapshot()
+
     # ── v2 兼容 API ──────────────────────────────────────
     # Week 1 的 on()/off() 接收 listener(data)，
     # 而 EventBus 的回调签名是 callback(event_type, data)。
@@ -297,7 +427,7 @@ class FusionKernel:
 
     def get_status(self) -> Dict[str, Any]:
         """获取内核状态摘要"""
-        return {
+        status = {
             "state": self._current_state.name,
             "phase": state_to_phase(self._current_state),
             "valid_events": [e.name for e in self.get_valid_events()],
@@ -311,6 +441,16 @@ class FusionKernel:
                 "event_counter": self.session_store._event_counter
             }
         }
+
+        # v2.5.0 调度器信息
+        sched = self.scheduler
+        if sched:
+            status["scheduler"] = {
+                "enabled": sched.config.enabled,
+                "progress": sched.get_progress(),
+            }
+
+        return status
 
 
 def create_kernel(fusion_dir: str = ".fusion") -> FusionKernel:
