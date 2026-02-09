@@ -77,8 +77,9 @@ GOAL=$(printf '%.60s' "$GOAL" | tr -d '"\\\t\n\r')
 PHASE=$(json_get "$FUSION_DIR/sessions.json" "current_phase")
 PHASE="${PHASE:-EXECUTE}"
 
-# Phase number mapping
+# Phase number mapping (9 phases: 0=UNDERSTAND to 8=DELIVER)
 case "$PHASE" in
+    UNDERSTAND) PHASE_NUM="0/8" ;;
     INITIALIZE) PHASE_NUM="1/8" ;;
     ANALYZE)    PHASE_NUM="2/8" ;;
     DECOMPOSE)  PHASE_NUM="3/8" ;;
