@@ -78,6 +78,7 @@ class FusionKernel:
         event: Event,
         payload: Optional[Dict[str, Any]] = None,
         idempotency_key: Optional[str] = None,
+        _recursion_depth: int = 0,
     ) -> TransitionResult:
         """
         派发事件，触发状态转移
@@ -86,10 +87,22 @@ class FusionKernel:
             event: 要派发的事件
             payload: 事件附带数据
             idempotency_key: 幂等键（可选），相同 key 的重复 dispatch 不产生副作用
+            _recursion_depth: 内部参数，用于防止无限递归
 
         Returns:
             TransitionResult: 转移结果
         """
+        # 防止递归错误处理导致无限循环
+        MAX_RECURSION_DEPTH = 3
+        if _recursion_depth >= MAX_RECURSION_DEPTH:
+            return TransitionResult(
+                success=False,
+                from_state=self._current_state,
+                to_state=self._current_state,
+                event=event,
+                error=f"Max recursion depth ({MAX_RECURSION_DEPTH}) exceeded in error handling"
+            )
+
         old_state = self._current_state
 
         # 更新上下文
@@ -119,10 +132,11 @@ class FusionKernel:
             try:
                 transition.action(self._context)
             except Exception as e:
-                error_result = self.dispatch(Event.ERROR_OCCURRED, {
+                # 递归深度 +1 防止无限循环
+                self.dispatch(Event.ERROR_OCCURRED, {
                     "error": str(e),
                     "source_event": event.name
-                })
+                }, _recursion_depth=_recursion_depth + 1)
                 return TransitionResult(
                     success=False,
                     from_state=old_state,

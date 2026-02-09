@@ -22,8 +22,9 @@ if [ -f "$FUSION_DIR/sessions.json" ]; then
     fi
 fi
 
-# Create .fusion directory
+# Create .fusion directory with restrictive permissions
 mkdir -p "$FUSION_DIR"
+chmod 700 "$FUSION_DIR"
 
 # Copy templates
 if [ -f "$TEMPLATE_DIR/task_plan.md" ]; then

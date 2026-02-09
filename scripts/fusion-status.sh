@@ -1,5 +1,6 @@
 #!/bin/bash
 # fusion-status.sh - Show current fusion status
+set -euo pipefail
 
 FUSION_DIR=".fusion"
 

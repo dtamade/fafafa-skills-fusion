@@ -80,7 +80,8 @@ json_set() {
     if command -v jq &>/dev/null; then
         local tmp_file
         tmp_file=$(mktemp "${FUSION_DIR}/.tmp.XXXXXX")
-        if jq ".$key = \"$value\"" "$file" > "$tmp_file" 2>/dev/null; then
+        # Use --arg to safely pass value (prevents injection)
+        if jq --arg v "$value" ".$key = \$v" "$file" > "$tmp_file" 2>/dev/null; then
             mv "$tmp_file" "$file"
             return 0
         else
@@ -188,11 +189,12 @@ output_block_json() {
                 "systemMessage": $msg
             }'
     else
-        # Fallback: manual JSON (escape quotes and newlines in reason)
+        # Fallback: manual JSON (escape all JSON-unsafe characters)
+        # Order matters: escape backslash first, then other chars
         local escaped_reason
-        escaped_reason=$(printf '%s' "$reason" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g' | awk '{printf "%s\\n", $0}' | sed 's/\\n$//')
+        escaped_reason=$(printf '%s' "$reason" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g; s/\x08/\\b/g; s/\x0c/\\f/g; s/\r/\\r/g' | awk '{printf "%s\\n", $0}' | sed 's/\\n$//')
         local escaped_msg
-        escaped_msg=$(printf '%s' "$system_msg" | sed 's/\\/\\\\/g; s/"/\\"/g')
+        escaped_msg=$(printf '%s' "$system_msg" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g; s/\x08/\\b/g; s/\x0c/\\f/g; s/\r/\\r/g; s/\n/\\n/g')
         echo "{\"decision\":\"block\",\"reason\":\"$escaped_reason\",\"systemMessage\":\"$escaped_msg\"}"
     fi
 }

@@ -1,7 +1,7 @@
 #!/bin/bash
 # fusion-git.sh - Git operations for Fusion workflow
 
-set -e
+set -euo pipefail
 
 FUSION_DIR=".fusion"
 ACTION="${1:-status}"
@@ -127,7 +127,7 @@ cleanup() {
 # Main command handler
 case "$ACTION" in
     create-branch)
-        GOAL_SLUG="$2"
+        GOAL_SLUG="${2:-}"
         if [ -z "$GOAL_SLUG" ]; then
             log_error "Usage: fusion-git.sh create-branch <goal-slug>"
             exit 1
@@ -136,8 +136,8 @@ case "$ACTION" in
         ;;
 
     commit)
-        MESSAGE="$2"
-        TASK_ID="$3"
+        MESSAGE="${2:-}"
+        TASK_ID="${3:-}"
         if [ -z "$MESSAGE" ]; then
             log_error "Usage: fusion-git.sh commit <message> [task_id]"
             exit 1
@@ -158,7 +158,7 @@ case "$ACTION" in
         ;;
 
     cleanup)
-        ORIGINAL_BRANCH="$2"
+        ORIGINAL_BRANCH="${2:-}"
         cleanup "$ORIGINAL_BRANCH"
         ;;
 
