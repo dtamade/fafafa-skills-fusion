@@ -171,7 +171,7 @@ docs/
 
 ## 里程碑
 
-- [ ] **Week 4**: v2.1.0 发布 (状态机内核)
+- [x] **Week 4**: v2.1.0 发布 (状态机内核) ✅ 2026-02-09
 - [ ] **Week 8**: v2.5.0 发布 (并行 + 治理)
 - [ ] **Week 12**: v3.0.0 GA 发布
 
@@ -182,3 +182,6 @@ docs/
 - [DESIGN.md](./DESIGN.md) - v2.0 架构设计
 - [EXECUTION_PROTOCOL.md](./EXECUTION_PROTOCOL.md) - 8 阶段执行协议
 - [docs/COMPATIBILITY.md](./docs/COMPATIBILITY.md) - 跨平台兼容性报告
+- [docs/RUNTIME_KERNEL_DESIGN.md](./docs/RUNTIME_KERNEL_DESIGN.md) - v2.1.0 内核设计
+- [docs/UPGRADE_v2_COMPAT.md](./docs/UPGRADE_v2_COMPAT.md) - v2.0→v2.1.0 升级指南
+- [CHANGELOG.md](./CHANGELOG.md) - 变更日志
