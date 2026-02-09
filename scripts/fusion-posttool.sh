@@ -19,12 +19,57 @@ SNAPSHOT_FILE="$FUSION_DIR/.progress_snapshot"
 
 # --- Runtime v2.1 adapter ---
 # If runtime is enabled, delegate to Python compat_v2 module.
+# Also trigger state machine events for task transitions.
 if [ -f "$FUSION_DIR/config.yaml" ] && grep -q 'enabled: *true' "$FUSION_DIR/config.yaml" 2>/dev/null; then
-    if python3 -m runtime.compat_v2 posttool "$FUSION_DIR" 2>/dev/null; then
-        exit 0
+    # Get posttool output
+    if OUTPUT=$(python3 -m runtime.compat_v2 posttool "$FUSION_DIR" 2>/dev/null); then
+        echo "$OUTPUT"
     fi
-    # Python failed - fall through to Shell logic
+    # Trigger state machine events based on task state changes
+    # This is done regardless of posttool output success
+    python3 << 'PYEOF' 2>/dev/null || true
+import sys
+sys.path.insert(0, "scripts")
+from pathlib import Path
+from runtime.kernel import create_kernel
+from runtime.state_machine import Event, State
+
+fusion_dir = ".fusion"
+task_plan = Path(fusion_dir) / "task_plan.md"
+
+if not task_plan.exists():
+    sys.exit(0)
+
+content = task_plan.read_text()
+completed = content.count("[COMPLETED]")
+pending = content.count("[PENDING]")
+in_progress = content.count("[IN_PROGRESS]")
+failed = content.count("[FAILED]")
+
+total_remaining = pending + in_progress + failed
+
+kernel = create_kernel(fusion_dir)
+kernel.load_state()
+
+# If in EXECUTE phase and all tasks done, transition to VERIFY
+if kernel.current_state == State.EXECUTE and total_remaining == 0 and completed > 0:
+    kernel.dispatch(Event.ALL_TASKS_DONE)
+# If task in progress, dispatch TASK_DONE to stay in EXECUTE (for logging)
+elif kernel.current_state == State.EXECUTE and completed > 0:
+    # Check if a task was just completed by comparing to snapshot
+    snap_file = Path(fusion_dir) / ".progress_snapshot"
+    if snap_file.exists():
+        prev = snap_file.read_text().strip().split(":")
+        prev_completed = int(prev[0]) if prev and prev[0].isdigit() else 0
+        if completed > prev_completed:
+            # Dispatch TASK_DONE (stays in EXECUTE if tasks remaining)
+            kernel.context.pending_tasks = total_remaining
+            kernel.context.completed_tasks = completed
+            kernel.dispatch(Event.TASK_DONE)
+PYEOF
+    exit 0
 fi
+# Python failed or not enabled - fall through to Shell logic
 
 # --- JSON parsing helper ---
 json_get() {

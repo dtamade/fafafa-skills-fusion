@@ -271,7 +271,7 @@ def adapt_pretool(fusion_dir: str = ".fusion") -> PretoolResult:
     phase = snapshot.get("current_phase", "EXECUTE")
 
     phase_map = {
-        "INITIALIZE": "1/8", "ANALYZE": "2/8", "DECOMPOSE": "3/8",
+        "UNDERSTAND": "0/8", "INITIALIZE": "1/8", "ANALYZE": "2/8", "DECOMPOSE": "3/8",
         "EXECUTE": "4/8", "VERIFY": "5/8", "REVIEW": "6/8",
         "COMMIT": "7/8", "DELIVER": "8/8",
     }
@@ -390,6 +390,23 @@ def _read_goal(fusion_dir: str) -> str:
         return ""
 
 
+def set_goal(fusion_dir: str, goal: str) -> bool:
+    """设置 goal 到 sessions.json"""
+    sessions_file = Path(fusion_dir) / "sessions.json"
+    try:
+        data = {}
+        if sessions_file.exists():
+            with open(sessions_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        data["goal"] = goal
+        with open(sessions_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        return True
+    except (json.JSONDecodeError, IOError) as e:
+        print(f"Error setting goal: {e}", file=sys.stderr)
+        return False
+
+
 # ── CLI 入口 ──────────────────────────────────────
 # Shell 脚本通过: python3 -m runtime.compat_v2 <command> [fusion_dir]
 
@@ -424,6 +441,16 @@ def main():
             result = adapt_posttool(fusion_dir)
             for line in result.lines:
                 print(line)
+
+        elif command == "set-goal":
+            if len(sys.argv) < 4:
+                print("Usage: python3 -m runtime.compat_v2 set-goal <fusion_dir> <goal>", file=sys.stderr)
+                sys.exit(1)
+            goal = sys.argv[3]
+            if set_goal(fusion_dir, goal):
+                print(f"Goal set: {goal[:60]}...")
+            else:
+                sys.exit(1)
 
         else:
             print(f"Unknown command: {command}", file=sys.stderr)
