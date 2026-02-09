@@ -1,0 +1,5 @@
+.ace-tool/
+
+# Fusion working directory
+.fusion/
+__pycache__/

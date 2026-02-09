@@ -1,0 +1,44 @@
+{
+  "workflow_id": null,
+  "goal": null,
+  "started_at": null,
+  "status": "not_started",
+  "current_phase": null,
+  "codex_session": null,
+  "tasks": {},
+  "strikes": {
+    "current_task": null,
+    "count": 0,
+    "history": []
+  },
+  "git": {
+    "branch": null,
+    "commits": []
+  },
+  "last_checkpoint": null,
+  "config": {
+    "tdd_enabled": true,
+    "git_enabled": true,
+    "parallel": 2,
+    "backend": "codex"
+  },
+  "_status_values": [
+    "not_started",
+    "in_progress",
+    "paused",
+    "waiting_user",
+    "completed",
+    "cancelled",
+    "stuck"
+  ],
+  "_phase_values": [
+    "INITIALIZE",
+    "ANALYZE",
+    "DECOMPOSE",
+    "EXECUTE",
+    "VERIFY",
+    "REVIEW",
+    "COMMIT",
+    "DELIVER"
+  ]
+}
