@@ -144,7 +144,8 @@ UPDATE_SUCCESS=false
 
 if command -v jq &>/dev/null; then
     TMP_FILE=$(mktemp "${FUSION_DIR}/.tmp.XXXXXX")
-    if jq ".status = \"in_progress\" | .last_checkpoint = \"$TIMESTAMP\"" "$FUSION_DIR/sessions.json" > "$TMP_FILE" 2>/dev/null; then
+    # Use --arg to safely pass timestamp (prevents injection)
+    if jq --arg ts "$TIMESTAMP" '.status = "in_progress" | .last_checkpoint = $ts' "$FUSION_DIR/sessions.json" > "$TMP_FILE" 2>/dev/null; then
         mv "$TMP_FILE" "$FUSION_DIR/sessions.json"
         UPDATE_SUCCESS=true
     else

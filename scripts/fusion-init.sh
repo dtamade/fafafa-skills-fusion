@@ -22,6 +22,12 @@ if [ -f "$FUSION_DIR/sessions.json" ]; then
     fi
 fi
 
+# Reject symlink to prevent symlink attacks
+if [ -L "$FUSION_DIR" ]; then
+    echo "❌ Security: $FUSION_DIR is a symlink, refusing to use"
+    exit 1
+fi
+
 # Create .fusion directory with restrictive permissions
 mkdir -p "$FUSION_DIR"
 chmod 700 "$FUSION_DIR"

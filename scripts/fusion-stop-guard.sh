@@ -189,13 +189,18 @@ output_block_json() {
                 "systemMessage": $msg
             }'
     else
-        # Fallback: manual JSON (escape all JSON-unsafe characters)
-        # Order matters: escape backslash first, then other chars
-        local escaped_reason
-        escaped_reason=$(printf '%s' "$reason" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g; s/\x08/\\b/g; s/\x0c/\\f/g; s/\r/\\r/g' | awk '{printf "%s\\n", $0}' | sed 's/\\n$//')
-        local escaped_msg
-        escaped_msg=$(printf '%s' "$system_msg" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g; s/\x08/\\b/g; s/\x0c/\\f/g; s/\r/\\r/g; s/\n/\\n/g')
-        echo "{\"decision\":\"block\",\"reason\":\"$escaped_reason\",\"systemMessage\":\"$escaped_msg\"}"
+        # Fallback: use Python json.dumps for reliable escaping (covers all control chars)
+        # If Python unavailable, fall back to sed (best effort)
+        if command -v python3 &>/dev/null; then
+            python3 -c "import json,sys; print(json.dumps({'decision':'block','reason':sys.argv[1],'systemMessage':sys.argv[2]}))" "$reason" "$system_msg"
+        else
+            # Last resort: sed-based escaping (may miss some control chars)
+            local escaped_reason
+            escaped_reason=$(printf '%s' "$reason" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g; s/\r/\\r/g' | awk '{printf "%s\\n", $0}' | sed 's/\\n$//')
+            local escaped_msg
+            escaped_msg=$(printf '%s' "$system_msg" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g; s/\r/\\r/g; s/\n/\\n/g')
+            echo "{\"decision\":\"block\",\"reason\":\"$escaped_reason\",\"systemMessage\":\"$escaped_msg\"}"
+        fi
     fi
 }
 

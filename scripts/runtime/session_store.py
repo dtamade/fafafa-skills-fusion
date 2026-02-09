@@ -76,8 +76,13 @@ class SessionStore:
         return self.fusion_dir / "sessions.json"
 
     def ensure_dir(self) -> None:
-        """确保存储目录存在"""
+        """确保存储目录存在，并设置安全权限"""
         self.fusion_dir.mkdir(parents=True, exist_ok=True)
+        # Set restrictive permissions (owner only) to prevent symlink attacks
+        try:
+            os.chmod(self.fusion_dir, 0o700)
+        except OSError:
+            pass  # Best effort - may fail on some filesystems
 
     def append_event(
         self,
