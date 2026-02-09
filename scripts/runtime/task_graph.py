@@ -35,6 +35,12 @@ class TaskNode:
     cost_budget: int = 0       # token 预算
     latency_budget: int = 0    # 毫秒
 
+    def __post_init__(self):
+        if self.dependencies is None:
+            self.dependencies = []
+        if self.writeset is None:
+            self.writeset = []
+
 
 @dataclass
 class Batch:
@@ -277,15 +283,19 @@ class TaskGraph:
     @classmethod
     def from_task_plan_content(cls, content: str) -> "TaskGraph":
         """从 task_plan.md 文本内容解析构建 TaskGraph"""
+        if not isinstance(content, str):
+            raise TypeError(f"content must be str, got {type(content).__name__}")
+
         graph = cls()
 
         # 匹配任务头: ### Task N: 名称 [STATUS]
+        # 状态限定为已知枚举，防止任务名含 [] 时误匹配
         task_pattern = re.compile(
-            r"###\s+Task\s+(\d+):\s+(.+?)\s+\[(\w+)\]"
+            r"###\s+Task\s+(\d+):\s+(.+)\s+\[(PENDING|IN_PROGRESS|COMPLETED|FAILED)\]\s*$"
         )
         # 匹配属性行
-        type_pattern = re.compile(r"-\s+Type:\s*(\S+)")
-        backend_pattern = re.compile(r"-\s+Backend:\s*(\S+)")
+        type_pattern = re.compile(r"-\s+Type:\s*(.+)$")
+        backend_pattern = re.compile(r"-\s+Backend:\s*(.+)$")
         dep_pattern = re.compile(r"-\s+Dependencies:\s*\[([^\]]*)\]")
         writeset_pattern = re.compile(r"-\s+Writeset:\s*\[([^\]]*)\]")
         cost_pattern = re.compile(r"-\s+CostBudget:\s*(\d+)")
@@ -319,12 +329,12 @@ class TaskGraph:
             # 解析属性
             m = type_pattern.match(line.strip())
             if m:
-                current_node.task_type = m.group(1)
+                current_node.task_type = m.group(1).strip()
                 continue
 
             m = backend_pattern.match(line.strip())
             if m:
-                current_node.backend = m.group(1)
+                current_node.backend = m.group(1).strip()
                 continue
 
             m = dep_pattern.match(line.strip())
@@ -332,7 +342,8 @@ class TaskGraph:
                 raw = m.group(1).strip()
                 if raw:
                     current_node.dependencies = [
-                        d.strip() for d in raw.split(",") if d.strip()
+                        d.strip().strip("\"'") for d in raw.split(",")
+                        if d.strip().strip("\"'")
                     ]
                 continue
 
@@ -341,7 +352,8 @@ class TaskGraph:
                 raw = m.group(1).strip()
                 if raw:
                     current_node.writeset = [
-                        w.strip() for w in raw.split(",") if w.strip()
+                        w.strip().strip("\"'") for w in raw.split(",")
+                        if w.strip().strip("\"'")
                     ]
                 continue
 

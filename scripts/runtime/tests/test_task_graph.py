@@ -423,5 +423,46 @@ class TestFromTaskPlan(unittest.TestCase):
         self.assertEqual(graph.get_failed_count(), 1)
 
 
+    def test_parse_name_with_brackets(self):
+        """P1: 任务名含中括号不应误解析状态"""
+        content = (
+            "### Task 1: Fix [Auth] module [PENDING]\n"
+            "- Type: implementation\n"
+            "- Dependencies: []\n"
+        )
+        graph = TaskGraph.from_task_plan_content(content)
+        node = graph.get_node("1")
+        self.assertIsNotNone(node)
+        self.assertEqual(node.status, "PENDING")
+        self.assertIn("[Auth]", node.name)
+
+    def test_parse_quoted_dependencies(self):
+        """P2: Dependencies 含引号应去引号"""
+        content = (
+            '### Task 1: A [PENDING]\n'
+            '- Dependencies: []\n'
+            '\n'
+            '### Task 2: B [PENDING]\n'
+            '- Dependencies: ["1"]\n'
+        )
+        graph = TaskGraph.from_task_plan_content(content)
+        self.assertEqual(graph.get_node("2").dependencies, ["1"])
+
+    def test_parse_none_input_raises(self):
+        """P1: None 输入应抛 TypeError"""
+        with self.assertRaises(TypeError):
+            TaskGraph.from_task_plan_content(None)
+
+    def test_tasknode_none_dependencies(self):
+        """P1: dependencies=None 归一化为 []"""
+        node = TaskNode(task_id="1", name="A", dependencies=None)
+        self.assertEqual(node.dependencies, [])
+
+    def test_tasknode_none_writeset(self):
+        """P1: writeset=None 归一化为 []"""
+        node = TaskNode(task_id="1", name="A", writeset=None)
+        self.assertEqual(node.writeset, [])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
