@@ -85,6 +85,36 @@ class TestFusionStatusScript(unittest.TestCase):
         self.assertIn("safe_backlog.last_injected_at:", proc.stdout)
         self.assertIn("safe_backlog.last_injected_at_iso: 2023-11-14T22:13:20Z", proc.stdout)
 
+    def test_status_prints_dependency_report(self):
+        (self.fusion_dir / "dependency_report.json").write_text(
+            json.dumps(
+                {
+                    "status": "blocked",
+                    "source": "fusion-codeagent.sh",
+                    "reason": "Missing executable for backend orchestration",
+                    "missing": ["codeagent-wrapper"],
+                    "next_actions": ["Install or expose codeagent-wrapper in PATH."],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        proc = subprocess.run(
+            ["bash", str(SCRIPTS_DIR / "fusion-status.sh")],
+            cwd=str(self.temp_dir),
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+
+        self.assertEqual(proc.returncode, 0)
+        self.assertIn("## Dependency Report", proc.stdout)
+        self.assertIn("status: blocked", proc.stdout)
+        self.assertIn("missing: codeagent-wrapper", proc.stdout)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

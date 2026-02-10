@@ -46,7 +46,7 @@ EOF
 
 ## Phase 0: UNDERSTAND (理解确认)
 
-**核心理念**：先理解后执行，确保 AI 正确理解用户意图再开始工作。
+**核心理念**：先理解后执行，降低目标漂移，但默认不打断自治循环。
 
 ### 0.1 检查跳过标志
 
@@ -59,118 +59,44 @@ if "--force" in args or "--yolo" in args:
 
 ### 0.2 静默扫描项目
 
-**目的**：在不打扰用户的情况下收集上下文
-
 ```python
 context = {
-    "tech_stack": detect_tech_stack(),      # package.json/go.mod/pyproject.toml
+    "tech_stack": detect_tech_stack(),
     "test_framework": detect_test_framework(),
-    "project_structure": scan_directories(), # src/, tests/, docs/
-    "related_files": ace_tool_search(goal),  # 语义搜索
-    "recent_changes": git_log_5()            # 最近提交
+    "project_structure": scan_directories(),
 }
 ```
 
-**技术栈检测规则**：
-
-| 文件 | 技术栈 | 测试框架 |
-|------|--------|----------|
-| `package.json` | Node.js | jest/mocha/vitest |
-| `go.mod` | Go | go test |
-| `pyproject.toml` | Python | pytest |
-| `Cargo.toml` | Rust | cargo test |
-
 ### 0.3 目标评分
 
-使用 `prompts/understand.md` 中的评分 prompt：
-
-```
 评分维度（总分 0-10）：
+
 - 目标明确性 (0-3)
 - 预期结果 (0-3)
 - 边界范围 (0-2)
 - 约束条件 (0-2)
+
+### 0.4 阈值决策（与配置一致）
+
+| 条件 | 默认行为 (`require_confirmation=false`) | 严格模式 (`require_confirmation=true`) |
+|------|------------------------------------------|----------------------------------------|
+| `score >= pass_threshold` | 自动推进到 `INITIALIZE` | 自动推进到 `INITIALIZE` |
+| `score < pass_threshold` | 记录缺失项与假设后继续 | 保持在 `UNDERSTAND`，等待澄清 |
+
+### 0.5 配置项
+
+```yaml
+understand:
+  pass_threshold: 7
+  require_confirmation: false
+  max_questions: 2
 ```
 
-**决策逻辑**：
+### 0.6 输出与持久化
 
-| 评分 | 行为 |
-|------|------|
-| ≥ 7 | 直接展示理解摘要 |
-| 5-6 | 追问 1 轮后展示 |
-| < 5 | 追问 2 轮，仍不足则建议重述 |
-
-### 0.4 追问流程（如需要）
-
-**关键原则**：
-- 一次只问一个问题
-- 优先多选题
-- 标注推荐选项（基于上下文推断）
-- 最多 2 轮
-
-**示例**：
-
-```
-● 认证方式？
-  [1] JWT (推荐 - 项目已有 jsonwebtoken 依赖)
-  [2] Session
-  [3] OAuth2
-  [4] 其他（请说明）
-```
-
-### 0.5 展示理解摘要
-
-```markdown
-## 📋 Fusion 理解确认
-
-**目标**：实现用户认证系统
-
-**上下文**：
-• 技术栈：Express + TypeScript + PostgreSQL
-• 测试框架：Jest
-• 相关文件：src/middleware/auth.ts
-
-**计划范围**：
-• 用户模型 + 注册/登录 API + JWT 中间件
-• 预计 5 个任务，约 20-30 分钟
-
-**假设** ⚠️：
-• 认证方式：JWT（如需 Session 请说明）
-• 密码哈希：bcrypt
-
-确认开始？(ok/修改/取消)
-```
-
-### 0.6 用户响应处理
-
-| 响应 | 行为 |
-|------|------|
-| `ok` / `确认` / `y` | 进入 Phase 1 INITIALIZE |
-| 包含修改内容 | 更新理解，重新展示摘要 |
-| `取消` / `cancel` | 退出工作流 |
-
-### 0.7 记录理解结果
-
-将确认的理解写入 `.fusion/findings.md`：
-
-```markdown
-## UNDERSTAND Phase
-
-**原始目标**: <用户输入>
-**确认时间**: <timestamp>
-**评分**: <total>/10
-
-### 上下文
-<context summary>
-
-### 假设
-<assumptions>
-
-### 用户补充
-<answers if any>
-```
-
----
+- 将理解摘要、缺失项、假设写入 `.fusion/findings.md`
+- 当满足推进条件时触发 `UNDERSTAND_DONE`
+- 若严格模式低分阻塞，输出澄清提示并保持 `UNDERSTAND`
 
 ## Phase 1: INITIALIZE (初始化)
 

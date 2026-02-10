@@ -5,7 +5,7 @@ Fusion UNDERSTAND 阶段最小执行器
 - 基础技术栈扫描
 - 目标清晰度评分（规则启发式）
 - 生成摘要并写入 findings.md
-- 触发 UNDERSTAND_DONE
+- 满足阈值后触发 UNDERSTAND_DONE
 """
 
 from __future__ import annotations
@@ -13,8 +13,9 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
+from .config import load_fusion_config
 from .kernel import create_kernel
 from .state_machine import Event, State
 
@@ -35,7 +36,10 @@ class UnderstandScores:
 class UnderstandResult:
     goal: str
     scores: UnderstandScores
+    threshold: int
     pass_threshold: bool
+    require_confirmation: bool
+    needs_confirmation: bool
     context: Dict[str, str]
     assumptions: List[str]
     missing: List[str]
@@ -147,8 +151,16 @@ def score_goal(goal: str) -> Tuple[UnderstandScores, List[str], List[str]]:
     return scores, missing, assumptions
 
 
-def build_summary(goal: str, context: Dict[str, str], scores: UnderstandScores, assumptions: List[str]) -> str:
+def build_summary(
+    goal: str,
+    context: Dict[str, str],
+    scores: UnderstandScores,
+    assumptions: List[str],
+    threshold: int,
+    require_confirmation: bool,
+) -> str:
     assumptions_lines = "\n".join([f"• {a}" for a in assumptions]) if assumptions else "• 无"
+    mode = "strict" if require_confirmation else "auto-continue"
     return (
         "## 📋 Fusion 理解确认\n\n"
         f"**目标**：{goal}\n\n"
@@ -158,7 +170,7 @@ def build_summary(goal: str, context: Dict[str, str], scores: UnderstandScores, 
         f"• 目录结构：{context.get('structure', 'unknown')}\n\n"
         "**评分**：\n"
         f"• clarity={scores.clarity}, outcome={scores.outcome}, scope={scores.scope}, constraints={scores.constraints}\n"
-        f"• total={scores.total}/10\n\n"
+        f"• total={scores.total}/10 (threshold={threshold}, mode={mode})\n\n"
         "**假设** ⚠️：\n"
         f"{assumptions_lines}\n"
     )
@@ -169,7 +181,10 @@ def write_findings(fusion_dir: Path, result: UnderstandResult) -> None:
     with open(findings, "a", encoding="utf-8") as f:
         f.write("\n## UNDERSTAND Phase\n\n")
         f.write(f"**原始目标**: {result.goal}\n")
-        f.write(f"**评分**: {result.scores.total}/10\n")
+        f.write(f"**评分**: {result.scores.total}/10 (threshold={result.threshold})\n")
+        f.write(f"**模式**: {'strict' if result.require_confirmation else 'auto-continue'}\n")
+        if result.needs_confirmation:
+            f.write("**状态**: 需要补充澄清后再推进\n")
         f.write("\n### 上下文\n")
         for k, v in result.context.items():
             f.write(f"- {k}: {v}\n")
@@ -187,12 +202,34 @@ def run_understand(goal: str, fusion_dir: str = ".fusion", project_root: str = "
     fusion_path = Path(fusion_dir)
     context = detect_project_context(Path(project_root))
     scores, missing, assumptions = score_goal(goal)
-    summary = build_summary(goal, context, scores, assumptions)
+
+    cfg = load_fusion_config(fusion_dir)
+    threshold = int(cfg.get("understand_pass_threshold", 7))
+    if threshold < 0:
+        threshold = 0
+    if threshold > 10:
+        threshold = 10
+    require_confirmation = bool(cfg.get("understand_require_confirmation", False))
+
+    pass_threshold = scores.total >= threshold
+    needs_confirmation = (not pass_threshold) and require_confirmation
+
+    summary = build_summary(
+        goal,
+        context,
+        scores,
+        assumptions,
+        threshold,
+        require_confirmation,
+    )
 
     result = UnderstandResult(
         goal=goal,
         scores=scores,
-        pass_threshold=scores.total >= 7,
+        threshold=threshold,
+        pass_threshold=pass_threshold,
+        require_confirmation=require_confirmation,
+        needs_confirmation=needs_confirmation,
         context=context,
         assumptions=assumptions,
         missing=missing,
@@ -202,7 +239,7 @@ def run_understand(goal: str, fusion_dir: str = ".fusion", project_root: str = "
     write_findings(fusion_path, result)
 
     kernel = create_kernel(str(fusion_path))
-    if kernel.current_state == State.UNDERSTAND:
+    if kernel.current_state == State.UNDERSTAND and not needs_confirmation:
         kernel.dispatch(
             Event.UNDERSTAND_DONE,
             payload={
@@ -210,7 +247,9 @@ def run_understand(goal: str, fusion_dir: str = ".fusion", project_root: str = "
                 "understand": {
                     "scores": asdict(scores),
                     "total": scores.total,
+                    "threshold": threshold,
                     "pass": result.pass_threshold,
+                    "needs_confirmation": needs_confirmation,
                     "missing": missing,
                     "assumptions": assumptions,
                 },
@@ -228,6 +267,7 @@ def main() -> int:
     parser.add_argument("goal", help="Workflow goal")
     parser.add_argument("--fusion-dir", default=".fusion")
     parser.add_argument("--project-root", default=".")
+    parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON output")
     args = parser.parse_args()
 
     result = run_understand(
@@ -236,12 +276,36 @@ def main() -> int:
         project_root=args.project_root,
     )
 
-    print(result.summary_md)
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "goal": result.goal,
+                    "scores": asdict(result.scores),
+                    "total": result.scores.total,
+                    "threshold": result.threshold,
+                    "pass_threshold": result.pass_threshold,
+                    "require_confirmation": result.require_confirmation,
+                    "needs_confirmation": result.needs_confirmation,
+                    "missing": result.missing,
+                    "assumptions": result.assumptions,
+                    "summary_md": result.summary_md,
+                },
+                ensure_ascii=False,
+            )
+        )
+    else:
+        print(result.summary_md)
+
+    if result.needs_confirmation:
+        print("[fusion] ⚠️ UNDERSTAND needs clarification (< threshold, strict mode).")
+        return 20
+
     if not result.pass_threshold:
-        print("[fusion] ⚠️ Goal clarity below threshold (<7). Proceeding with assumptions.")
+        print("[fusion] ⚠️ Goal clarity below threshold. Proceeding with assumptions.")
+
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -135,3 +135,28 @@ if [ -f "$FUSION_DIR/sessions.json" ]; then
         fi
     fi
 fi
+
+# Show unresolved dependency report (if present)
+if [ -f "$FUSION_DIR/dependency_report.json" ]; then
+    echo ""
+    echo "## Dependency Report"
+
+    DEP_STATUS=$(json_get "$FUSION_DIR/dependency_report.json" ".status")
+    DEP_SOURCE=$(json_get "$FUSION_DIR/dependency_report.json" ".source")
+    DEP_REASON=$(json_get "$FUSION_DIR/dependency_report.json" ".reason")
+
+    [ -n "$DEP_STATUS" ] && echo "status: $DEP_STATUS"
+    [ -n "$DEP_SOURCE" ] && echo "source: $DEP_SOURCE"
+    [ -n "$DEP_REASON" ] && echo "reason: $DEP_REASON"
+
+    if command -v jq &>/dev/null; then
+        DEP_MISSING=$(jq -r '.missing // [] | join(", ")' "$FUSION_DIR/dependency_report.json" 2>/dev/null || echo "")
+        DEP_NEXT=$(jq -r '.next_actions[0] // empty' "$FUSION_DIR/dependency_report.json" 2>/dev/null || echo "")
+    else
+        DEP_MISSING=$(grep -o '"missing"[[:space:]]*:[[:space:]]*\[[^]]*\]' "$FUSION_DIR/dependency_report.json" 2>/dev/null | sed 's/.*\[//; s/\].*//; s/"//g' || true)
+        DEP_NEXT=$(grep -o '"next_actions"[[:space:]]*:[[:space:]]*\[[^]]*\]' "$FUSION_DIR/dependency_report.json" 2>/dev/null | sed 's/.*\[//; s/\].*//; s/"//g' | cut -d',' -f1 || true)
+    fi
+
+    [ -n "$DEP_MISSING" ] && echo "missing: $DEP_MISSING"
+    [ -n "$DEP_NEXT" ] && echo "next: $DEP_NEXT"
+fi

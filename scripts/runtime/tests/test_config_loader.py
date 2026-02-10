@@ -28,6 +28,9 @@ class TestConfigLoader(unittest.TestCase):
         self.assertFalse(cfg["supervisor_enabled"])
         self.assertEqual(cfg["supervisor_mode"], "advisory")
         self.assertEqual(cfg["supervisor_persona"], "Guardian")
+        self.assertEqual(cfg["understand_pass_threshold"], 7)
+        self.assertFalse(cfg["understand_require_confirmation"])
+        self.assertEqual(cfg["understand_max_questions"], 2)
 
     def test_parses_yaml_sections(self):
         (self.fusion_dir / "config.yaml").write_text(
@@ -42,7 +45,11 @@ class TestConfigLoader(unittest.TestCase):
             "  enabled: true\n"
             "  max_parallel: 4\n"
             "budget:\n"
-            "  warning_threshold: 0.7\n",
+            "  warning_threshold: 0.7\n"
+            "understand:\n"
+            "  pass_threshold: 8\n"
+            "  require_confirmation: true\n"
+            "  max_questions: 3\n",
             encoding="utf-8",
         )
 
@@ -54,6 +61,21 @@ class TestConfigLoader(unittest.TestCase):
         self.assertTrue(cfg["scheduler_enabled"])
         self.assertEqual(cfg["scheduler_max_parallel"], 4)
         self.assertAlmostEqual(cfg["budget_warning_threshold"], 0.7)
+        self.assertEqual(cfg["understand_pass_threshold"], 8)
+        self.assertTrue(cfg["understand_require_confirmation"])
+        self.assertEqual(cfg["understand_max_questions"], 3)
+
+    def test_understand_threshold_clamp(self):
+        (self.fusion_dir / "config.yaml").write_text(
+            "understand:\n"
+            "  pass_threshold: 99\n"
+            "  max_questions: 0\n",
+            encoding="utf-8",
+        )
+
+        cfg = load_fusion_config(str(self.fusion_dir))
+        self.assertEqual(cfg["understand_pass_threshold"], 10)
+        self.assertEqual(cfg["understand_max_questions"], 1)
 
     def test_minimal_parser_fallback_shape(self):
         (self.fusion_dir / "config.yaml").write_text(

@@ -95,6 +95,11 @@ runtime:
   enabled: true
   compat_mode: true
 
+understand:
+  pass_threshold: 7
+  require_confirmation: false
+  max_questions: 2
+
 safe_backlog:
   enabled: true
   trigger_no_progress_rounds: 3
@@ -121,6 +126,27 @@ supervisor:
 
 See `templates/config.yaml` for the full recommended baseline.
 
+## Dependency Auto-Heal
+
+Fusion now attempts dependency recovery before failing hard:
+
+- Auto-resolves `codeagent-wrapper` from:
+  - `CODEAGENT_WRAPPER_BIN` (explicit path),
+  - `PATH`,
+  - `./node_modules/.bin/codeagent-wrapper`,
+  - `~/.local/bin/codeagent-wrapper`,
+  - `~/.npm-global/bin/codeagent-wrapper`.
+- Auto-detects Python runtime from `python3` or `python`.
+- If unresolved, writes `.fusion/dependency_report.json` with actionable next steps for people or agents.
+
+You can inspect unresolved dependency state with:
+
+```bash
+/fusion status
+```
+
+Look for the `## Dependency Report` section in the output.
+
 ## Project Docs
 
 - [`SKILL.md`](SKILL.md): skill spec and execution protocol
@@ -128,6 +154,8 @@ See `templates/config.yaml` for the full recommended baseline.
 - [`PARALLEL_EXECUTION.md`](PARALLEL_EXECUTION.md): parallel scheduling strategy
 - [`SESSION_RECOVERY.md`](SESSION_RECOVERY.md): resume and recovery behavior
 - [`CHANGELOG.md`](CHANGELOG.md): release history
+- [`docs/HOOKS_SETUP.md`](docs/HOOKS_SETUP.md): host hook wiring notes
+- [`docs/RUST_FUSION_BRIDGE_ROADMAP.md`](docs/RUST_FUSION_BRIDGE_ROADMAP.md): Rust binary migration roadmap
 
 ## Development
 

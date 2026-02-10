@@ -1,6 +1,6 @@
 ---
 name: fusion
-version: "2.0.0"
+version: "2.6.2"
 description: |
   自主工作流 Skill - 给目标后自主执行，只在必要时打扰用户。
   融合 Codex 执行、TDD 流程、Git 集成、3-Strike 降级策略。
@@ -41,6 +41,10 @@ hooks:
 ---
 
 # Fusion - 自主工作流
+
+> Note: `allowed-tools` / `hooks` in frontmatter are project metadata for portability.
+> Actual hook wiring depends on host configuration; see `docs/HOOKS_SETUP.md`.
+
 
 ## ⚠️ 执行循环协议 (CRITICAL)
 
@@ -175,68 +179,33 @@ def check_and_continue():
 
 ### Phase 0: UNDERSTAND (理解确认)
 
-**目的**：在开始执行前确保 AI 正确理解用户意图
+**目的**：在开始执行前确保 AI 尽量正确理解用户意图。
 
 ```
 用户输入 /fusion "目标"
       │
       ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  1. 静默扫描 (5-10秒)                                       │
-│     • 检测技术栈 (package.json/go.mod/pyproject.toml)       │
-│     • 检测项目结构 (src/, tests/)                           │
-│     • 语义搜索相关文件 (ace-tool)                           │
-│                                                              │
-│  2. 目标评分 (0-10)                                         │
-│     • 目标明确性 (0-3)                                      │
-│     • 预期结果 (0-3)                                        │
-│     • 边界范围 (0-2)                                        │
-│     • 约束条件 (0-2)                                        │
-│                                                              │
-│  3. 决策                                                     │
-│     • ≥7 分 → 展示理解摘要，等待确认                        │
-│     • <7 分 → 追问补充（最多 2 轮）                         │
-│                                                              │
-│  4. 用户响应                                                 │
-│     • "ok" → 进入 INITIALIZE                                │
-│     • "改动" → 调整后重新确认                               │
-│     • "取消" → 退出                                         │
+│  1. 静默扫描（技术栈/目录/相关文件）                        │
+│  2. 目标评分（0-10）                                       │
+│  3. 输出理解摘要与假设                                     │
+│  4. 阈值决策：                                              │
+│     • 默认（require_confirmation=false）：继续执行         │
+│     • 严格模式（require_confirmation=true）：低分阻塞      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**理解确认卡片示例**：
+**当前默认行为（v2.6.x）**：
 
-```
-┌─────────────────────────────────────────────────┐
-│ 📋 Fusion 理解确认                              │
-├─────────────────────────────────────────────────┤
-│ 目标：实现用户认证系统                          │
-│                                                 │
-│ 上下文：                                        │
-│ • 技术栈：Express + TypeScript + PostgreSQL    │
-│ • 测试框架：Jest                                │
-│ • 相关文件：src/middleware/auth.ts              │
-│                                                 │
-│ 计划范围：                                      │
-│ • 用户模型 + 注册/登录 API + JWT 中间件        │
-│ • 预计 5 个任务，约 20-30 分钟                 │
-│                                                 │
-│ 假设 ⚠️：                                       │
-│ • 认证方式：JWT（如需 Session 请说明）          │
-│ • 密码哈希：bcrypt                              │
-└─────────────────────────────────────────────────┘
+- `score >= pass_threshold`：自动推进到 `INITIALIZE`
+- `score < pass_threshold`：记录缺失项与假设后继续（不阻塞）
+- 可通过配置切换为严格模式：
 
-确认开始？(ok/修改/取消)
-```
-
-**追问示例**（一次一个问题，优先多选）：
-
-```
-● 认证方式？
-  [1] JWT (推荐 - 项目已有 jsonwebtoken 依赖)
-  [2] Session
-  [3] OAuth2
-  [4] 其他
+```yaml
+understand:
+  pass_threshold: 7
+  require_confirmation: false   # true: 低分阻塞，等待澄清
+  max_questions: 2
 ```
 
 **跳过机制**：
@@ -294,308 +263,91 @@ def check_and_continue():
 │  └─ 详细说明尝试过什么，请求指导                          │
 │                                                           │
 └───────────────────────────────────────────────────────────┘
-```
+## 后端路由（摘要）
+
+| 任务类型 | 首选后端 | 说明 |
+|----------|----------|------|
+| 任务分解 / 复杂分析 / 重构 | Codex | 需要深度代码和依赖理解 |
+| 文档 / 简单编辑 / 配置小改 | Claude | 低复杂度、快速响应 |
+
+详细路由与降级策略请看 `EXECUTION_PROTOCOL.md`。
 
 ---
 
-## 后端路由
-
-| 任务类型 | 后端 | 原因 |
-|----------|------|------|
-| 任务分解 | Codex | 需要深度代码库理解 |
-| 复杂分析 | Codex | 擅长理解依赖和架构 |
-| 算法实现 | Codex | 强大的逻辑推理 |
-| 重构 | Codex | 需要跟踪多文件依赖 |
-| 简单编辑 | Claude | 快速响应 |
-| 文档生成 | Claude | 擅长自然语言 |
-| 配置修改 | Claude | 低复杂度任务 |
-
----
-
-## 进度文件 (.fusion/ 目录)
+## 进度文件（.fusion）
 
 ```
 .fusion/
-├── task_plan.md      # 任务计划（阶段、状态、依赖）
-├── progress.md       # 进度日志（时间线）
-├── findings.md       # 发现记录（研究、决策）
-├── sessions.json     # 会话存储（Codex SESSION_ID）
-└── config.yaml       # 运行时配置
+├── task_plan.md
+├── progress.md
+├── findings.md
+├── sessions.json
+├── config.yaml
+├── events.jsonl
+└── dependency_report.json   # 依赖阻塞时生成
 ```
 
-### 查看进度
+常用查看方式：
 
 ```bash
-# 方式 1: 使用命令
 /fusion status
-
-# 方式 2: 直接读取
 cat .fusion/progress.md
-
-# 方式 3: 监听变化
 tail -f .fusion/progress.md
 ```
 
 ---
 
-## Git 集成
+## 依赖与自动修复
 
-- **任务开始**: `git checkout -b fusion/<goal-slug>`
-- **任务完成**: `git commit -m "<conventional commit>"`
-- **全部完成**: 汇报分支状态，建议 merge/PR
+Fusion 会先自动处理关键依赖，再决定是否阻塞：
 
-### Commit Message 格式
-
-遵循 Conventional Commits:
-```
-feat: add user authentication endpoint
-fix: resolve password hashing issue
-test: add integration tests for auth module
-refactor: extract validation logic
-docs: update API documentation
-```
+- 自动识别 Python：`python3` → `python`
+- 自动定位 `codeagent-wrapper`：
+  - `CODEAGENT_WRAPPER_BIN`
+  - `PATH`
+  - `./node_modules/.bin/codeagent-wrapper`
+  - `~/.local/bin/codeagent-wrapper`
+  - `~/.npm-global/bin/codeagent-wrapper`
+- 仍无法处理时：
+  - 写入 `.fusion/dependency_report.json`
+  - 在 `/fusion status` 的 `Dependency Report` 展示修复建议
 
 ---
 
-## 任务自动拆分
-
-Codex 分析代码库后生成任务列表，特点：
-- **粒度**: 每任务 5-15 分钟
-- **依赖**: 自动识别任务间依赖
-- **并行**: 无依赖任务可并行执行
-
-### 示例
-
-**输入**: "实现用户认证系统"
-
-**拆分输出**:
-```yaml
-tasks:
-  - id: auth_api_design
-    type: design
-    dependencies: []
-
-  - id: db_user_schema
-    type: implementation
-    dependencies: []
-
-  - id: auth_register
-    type: implementation
-    dependencies: [auth_api_design, db_user_schema]
-
-  - id: auth_login
-    type: implementation
-    dependencies: [auth_api_design, db_user_schema]
-
-  - id: jwt_middleware
-    type: implementation
-    dependencies: [auth_login]
-
-  - id: integration_tests
-    type: verification
-    dependencies: [auth_register, auth_login, jwt_middleware]
-```
-
----
-
-## 与现有工具的关系
-
-### 内部调用
-
-Fusion 内部使用:
-- `codeagent-wrapper` - 多后端 AI 代码执行（支持 Codex、Claude 等）
-
-### 借鉴来源
-
-| 来源 | 融入特性 |
-|------|----------|
-| codex skill | HEREDOC 语法、SESSION_ID、并行执行 |
-| planning-with-files | 文件持久化、3-Strike 协议 |
-| subagent-driven | 两阶段审查模式 |
-| superpowers TDD | 红-绿-重构循环 |
-
----
-
-## 故障排除
-
-### Codex 超时
-- 默认超时: 2 小时
-- 触发降级到 Claude 本地
-
-### 任务失败
-- 查看 `.fusion/progress.md` 中的错误日志
-- 使用 `/fusion logs` 查看详细信息
-- 3-Strike 后会自动询问用户
-
-### 会话恢复
-- `/clear` 后运行 `/fusion resume`
-- 读取 `.fusion/sessions.json` 恢复 Codex 会话
-
----
-
-## 配置
-
-### .fusion/config.yaml
+## 配置（关键项）
 
 ```yaml
-# 后端配置
-backends:
-  primary: codex
-  fallback: claude
-
-# 执行配置
-execution:
-  parallel: 2
-  timeout: 7200000  # 2 小时
-
-# TDD 配置
-tdd:
+runtime:
   enabled: true
-  test_command: "npm test"
 
-# Git 配置
-git:
+understand:
+  pass_threshold: 7
+  require_confirmation: false  # true: 低分阻塞并等待澄清
+
+scheduler:
   enabled: true
-  branch_prefix: "fusion/"
-  auto_commit: true
+  max_parallel: 2
+  fail_fast: false
+
+safe_backlog:
+  enabled: true
+  trigger_no_progress_rounds: 3
+
+supervisor:
+  enabled: false
+  mode: advisory
 ```
+
+完整配置见：`templates/config.yaml`。
 
 ---
 
-## 执行协议
+## 执行规范与实现索引
 
-详细的执行流程请参考 [EXECUTION_PROTOCOL.md](EXECUTION_PROTOCOL.md)
+- 执行协议：`EXECUTION_PROTOCOL.md`
+- 并行策略：`PARALLEL_EXECUTION.md`
+- 会话恢复：`SESSION_RECOVERY.md`
+- Hook 挂载说明：`docs/HOOKS_SETUP.md`
+- 提示词模板：`prompts/*.md`
+- 运行脚本：`scripts/*.sh`
 
-### 后端调用规范
-
-**统一使用 codeagent-wrapper**（支持多后端，自动降级）：
-
-```bash
-# 主调用（HEREDOC 语法避免 shell 转义）
-codeagent-wrapper --backend codex - "$PWD" <<'EOF'
-<task content here>
-EOF
-
-# 恢复会话
-codeagent-wrapper --backend codex resume <SESSION_ID> - "$PWD" <<'EOF'
-<task content>
-EOF
-
-# 降级到 Claude
-codeagent-wrapper --backend claude - "$PWD" <<'EOF'
-<task content>
-EOF
-```
-
-**Bash 工具参数**：
-- `timeout: 7200000` (固定 2 小时)
-- `description: "<简短描述>"`
-
-### 会话复用
-
-每次后端调用返回 SESSION_ID，后续调用使用 `resume`：
-
-```bash
-# 首次调用
-codeagent-wrapper --backend codex - "$PWD" <<'EOF'
-analyze codebase
-EOF
-# 返回 SESSION_ID: 019xxx
-
-# 后续调用（复用上下文）
-codeagent-wrapper --backend codex resume 019xxx - "$PWD" <<'EOF'
-implement based on analysis
-EOF
-```
-
-### 降级执行
-
-当 Codex 失败时，降级到 Claude 本地：
-
-```markdown
-[CODEX_FALLBACK] Task: <task_id>
-Reason: <failure reason>
-Action: Executing with Claude directly
-```
-
-然后直接使用 Edit/Write 工具完成任务。
-
----
-
-## 并行执行
-
-详细的并行策略请参考 [PARALLEL_EXECUTION.md](PARALLEL_EXECUTION.md)
-
-### 基本原理
-
-- 无依赖的任务可以并行执行
-- 有依赖的任务等待依赖完成后执行
-- 最大并行度由 `config.yaml` 中的 `parallel` 控制
-
-### 依赖示例
-
-```yaml
-tasks:
-  - id: A, dependencies: []      # 第一批
-  - id: B, dependencies: []      # 第一批 (与 A 并行)
-  - id: C, dependencies: [A, B]  # 第二批 (等待 A, B)
-```
-
-执行顺序：
-```
-Batch 1: [A, B] (并行)
-Batch 2: [C]    (等待 Batch 1 完成)
-```
-
----
-
-## Git 集成
-
-### 自动分支
-
-工作流开始时自动创建分支：
-```bash
-git checkout -b fusion/<goal-slug>
-```
-
-### 自动提交
-
-每个任务完成后自动提交：
-```bash
-git add -A
-git commit -m "feat(<scope>): <description>"
-```
-
-### 脚本
-
-使用 `scripts/fusion-git.sh` 进行 Git 操作：
-```bash
-# 创建分支
-./scripts/fusion-git.sh create-branch "auth-system"
-
-# 提交变更
-./scripts/fusion-git.sh commit "feat(auth): add login endpoint"
-
-# 查看状态
-./scripts/fusion-git.sh status
-```
-
----
-
-## 内部实现细节
-
-### 文件引用
-
-本 Skill 使用以下内部文件：
-
-| 文件 | 用途 |
-|------|------|
-| `EXECUTION_PROTOCOL.md` | 详细执行流程 |
-| `PARALLEL_EXECUTION.md` | 并行执行策略 |
-| `prompts/decompose.md` | Codex 任务分解 prompt |
-| `prompts/tdd.md` | TDD 实现 prompt |
-| `prompts/error_recovery.md` | 错误恢复 prompt |
-| `prompts/code_review.md` | 代码审查 prompt |
-| `prompts/commit_message.md` | Commit 消息生成 |
-| `templates/*.md` | 文件模板 |
-| `scripts/*.sh` | 辅助脚本 |

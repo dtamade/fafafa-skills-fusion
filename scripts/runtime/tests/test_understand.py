@@ -53,6 +53,7 @@ class TestUnderstandRunner(unittest.TestCase):
 
         self.assertGreaterEqual(result.scores.total, 7)
         self.assertTrue(result.pass_threshold)
+        self.assertFalse(result.needs_confirmation)
         self.assertIn("Node.js", result.summary_md)
 
         findings = (self.fusion_dir / "findings.md").read_text(encoding="utf-8")
@@ -70,8 +71,29 @@ class TestUnderstandRunner(unittest.TestCase):
         )
         self.assertFalse(result.pass_threshold)
         self.assertTrue(len(result.missing) > 0)
+        self.assertFalse(result.needs_confirmation)
+
+    def test_run_understand_strict_mode_stays_in_understand(self):
+        (self.fusion_dir / "config.yaml").write_text(
+            "understand:\n"
+            "  pass_threshold: 9\n"
+            "  require_confirmation: true\n",
+            encoding="utf-8",
+        )
+
+        result = run_understand(
+            goal="优化一下",
+            fusion_dir=str(self.fusion_dir),
+            project_root=str(self.project_root),
+        )
+
+        self.assertFalse(result.pass_threshold)
+        self.assertTrue(result.require_confirmation)
+        self.assertTrue(result.needs_confirmation)
+
+        kernel = create_kernel(str(self.fusion_dir))
+        self.assertEqual(kernel.current_state, State.UNDERSTAND)
 
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
-

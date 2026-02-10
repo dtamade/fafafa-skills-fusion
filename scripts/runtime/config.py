@@ -105,6 +105,7 @@ def load_fusion_config(fusion_dir: str = ".fusion") -> Dict[str, Any]:
     budget = raw.get("budget") if isinstance(raw.get("budget"), dict) else {}
     safe_backlog = raw.get("safe_backlog") if isinstance(raw.get("safe_backlog"), dict) else {}
     supervisor = raw.get("supervisor") if isinstance(raw.get("supervisor"), dict) else {}
+    understand = raw.get("understand") if isinstance(raw.get("understand"), dict) else {}
 
     execution_parallel = _to_int(execution.get("parallel"), 2)
     safe_backlog_max_tasks_per_run = _to_int(safe_backlog.get("max_tasks_per_run"), 2)
@@ -118,6 +119,16 @@ def load_fusion_config(fusion_dir: str = ".fusion") -> Dict[str, Any]:
         safe_backlog_allowed_categories = "documentation,quality"
     else:
         safe_backlog_allowed_categories = str(safe_backlog_allowed_categories)
+
+    understand_threshold = _to_int(understand.get("pass_threshold"), 7)
+    if understand_threshold < 0:
+        understand_threshold = 0
+    if understand_threshold > 10:
+        understand_threshold = 10
+
+    understand_max_questions = _to_int(understand.get("max_questions"), 2)
+    if understand_max_questions < 1:
+        understand_max_questions = 1
 
     return {
         "runtime_enabled": _to_bool(runtime.get("enabled"), False),
@@ -155,4 +166,7 @@ def load_fusion_config(fusion_dir: str = ".fusion") -> Dict[str, Any]:
         "supervisor_cadence_rounds": _to_int(supervisor.get("cadence_rounds"), 2),
         "supervisor_force_emit_rounds": _to_int(supervisor.get("force_emit_rounds"), 12),
         "supervisor_max_suggestions": _to_int(supervisor.get("max_suggestions"), 2),
+        "understand_pass_threshold": understand_threshold,
+        "understand_require_confirmation": _to_bool(understand.get("require_confirmation"), False),
+        "understand_max_questions": understand_max_questions,
     }

@@ -119,6 +119,33 @@ class TestFusionCodeagentScript(unittest.TestCase):
         )
         self.assertNotEqual(proc.returncode, 0)
 
+    def test_missing_wrapper_emits_dependency_report(self):
+        (self.bin_dir / "codeagent-wrapper").unlink(missing_ok=True)
+
+        env = dict(os.environ)
+        # Keep core commands available but avoid accidental wrapper from custom PATHs
+        env["PATH"] = "/usr/bin:/bin"
+        env.pop("CODEAGENT_WRAPPER_BIN", None)
+
+        proc = subprocess.run(
+            ["bash", str(SCRIPTS_DIR / "fusion-codeagent.sh"), "EXECUTE"],
+            cwd=str(self.temp_dir),
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        self.assertEqual(proc.returncode, 127)
+        self.assertIn("Missing dependency: codeagent-wrapper", proc.stderr)
+
+        report_file = self.fusion_dir / "dependency_report.json"
+        self.assertTrue(report_file.exists())
+
+        report = json.loads(report_file.read_text(encoding="utf-8"))
+        self.assertEqual(report.get("status"), "blocked")
+        self.assertIn("codeagent-wrapper", report.get("missing", []))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -21,7 +21,14 @@ parallel:
 runtime:
   enabled: true
   compat_mode: true
-  version: "2.5.0"
+  version: "2.6.2"
+
+# Understand 阶段策略
+understand:
+  pass_threshold: 7         # 评分阈值 (0-10)
+  require_confirmation: false  # true 时低分阻塞，等待澄清
+  max_questions: 2
+
 
 # TDD 配置
 tdd:
