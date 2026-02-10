@@ -311,6 +311,72 @@ class TestConflictHandling(unittest.TestCase):
         self.assertTrue(len(d2.batch.tasks) > 0)
 
 
+
+class TestStrictBarrierPolicy(unittest.TestCase):
+    """严格并发屏障策略（Kernel 端到端）"""
+
+    def setUp(self):
+        self.temp_dir, self.fusion_dir = _setup_fusion_dir(TASK_PLAN_PARALLEL)
+        self.kernel = FusionKernel(fusion_dir=self.fusion_dir)
+        self.kernel.load_state()
+
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir)
+
+    def test_barrier_waits_for_whole_batch_to_settle(self):
+        """并发批次未全部结算前，不派发下一批"""
+        self.kernel.init_scheduler(
+            scheduler_config=SchedulerConfig(enabled=True, max_parallel=3)
+        )
+
+        d1 = self.kernel.get_next_batch()
+        self.assertIsNotNone(d1)
+        self.assertCountEqual(d1.batch.task_ids, ["1", "2", "3"])
+
+        # 未结算前持续阻塞
+        self.assertIsNone(self.kernel.get_next_batch())
+
+        self.kernel.complete_task("1")
+        self.assertIsNone(self.kernel.get_next_batch())
+
+        self.kernel.complete_task("2")
+        self.assertIsNone(self.kernel.get_next_batch())
+
+        self.kernel.complete_task("3")
+
+        # 批次全部结算后才解锁依赖任务
+        d2 = self.kernel.get_next_batch()
+        self.assertIsNotNone(d2)
+        self.assertEqual(d2.batch.task_ids, ["4"])
+
+    def test_fail_fast_halts_after_settled_failed_batch(self):
+        """fail_fast=true 时，失败批次结算后停止后续派发"""
+        self.kernel.init_scheduler(
+            scheduler_config=SchedulerConfig(
+                enabled=True,
+                max_parallel=2,
+                fail_fast=True,
+            )
+        )
+
+        d1 = self.kernel.get_next_batch()
+        self.assertIsNotNone(d1)
+        self.assertCountEqual(d1.batch.task_ids, ["1", "2"])
+
+        self.kernel.fail_task("1")
+        # 批次尚未结算（task 2 未回调），仍处于屏障
+        self.assertIsNone(self.kernel.get_next_batch())
+
+        self.kernel.complete_task("2")
+
+        # 批次结算后进入 fail_fast 停机，不再派发 task 3
+        self.assertIsNone(self.kernel.get_next_batch())
+
+        progress = self.kernel.scheduler.get_progress()
+        self.assertTrue(progress["fail_fast_halted"])
+        self.assertEqual(progress["pending"], 2)
+
+
 class TestBudgetExhaustion(unittest.TestCase):
     """预算耗尽集成"""
 

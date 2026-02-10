@@ -8,11 +8,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from runtime.task_graph import TaskGraph, TaskNode, Batch
-from runtime.conflict_detector import ConflictDetector
+from runtime.task_graph import TaskGraph, TaskNode
 from runtime.budget_manager import BudgetManager, BudgetConfig
-from runtime.router import Router
-from runtime.scheduler import Scheduler, SchedulerConfig, ScheduleDecision
+from runtime.scheduler import Scheduler, SchedulerConfig
 
 
 def _build_graph(tasks):
@@ -109,6 +107,126 @@ class TestSchedulerEnabled(unittest.TestCase):
         self.assertEqual(len(decision.batch.tasks), 1)
         self.assertEqual(decision.batch.task_ids, ["1"])
         self.assertEqual(decision.deferred, ["2"])
+
+
+class TestStrictBatchBarrier(unittest.TestCase):
+    """严格批次屏障：未结算前不可派发下一批"""
+
+    def test_active_batch_blocks_until_all_callbacks(self):
+        graph = _build_graph([
+            TaskNode(task_id="1", name="A"),
+            TaskNode(task_id="2", name="B"),
+        ])
+        scheduler = Scheduler(
+            graph=graph,
+            config=SchedulerConfig(enabled=True, max_parallel=2),
+        )
+
+        d1 = scheduler.pick_next_batch()
+        self.assertCountEqual(d1.batch.task_ids, ["1", "2"])
+
+        # 活动批次未结算，不允许再次派发
+        self.assertIsNone(scheduler.pick_next_batch())
+
+        scheduler.on_task_done("1")
+        self.assertIsNone(scheduler.pick_next_batch())
+
+        scheduler.on_task_done("2")
+        # 第一次 pick 触发关闭活动批次；无剩余任务
+        self.assertIsNone(scheduler.pick_next_batch())
+
+        progress = scheduler.get_progress()
+        self.assertEqual(progress["batches_done"], 1)
+
+    def test_settled_batch_advances_without_on_batch_done(self):
+        graph = _build_graph([
+            TaskNode(task_id="1", name="A"),
+            TaskNode(task_id="2", name="B", dependencies=["1"]),
+        ])
+        scheduler = Scheduler(
+            graph=graph,
+            config=SchedulerConfig(enabled=True),
+        )
+
+        d1 = scheduler.pick_next_batch()
+        self.assertEqual(d1.batch.task_ids, ["1"])
+
+        scheduler.on_task_done("1")
+        # 不显式调用 on_batch_done 也可前进到下一批
+        d2 = scheduler.pick_next_batch()
+        self.assertIsNotNone(d2)
+        self.assertEqual(d2.batch.task_ids, ["2"])
+
+    def test_on_batch_done_ignores_unsettled_batch(self):
+        graph = _build_graph([
+            TaskNode(task_id="1", name="A"),
+            TaskNode(task_id="2", name="B"),
+        ])
+        scheduler = Scheduler(
+            graph=graph,
+            config=SchedulerConfig(enabled=True, max_parallel=2),
+        )
+
+        scheduler.pick_next_batch()
+        scheduler.on_task_done("1")
+
+        # 仍有未结算任务时，on_batch_done 不应推进批次
+        scheduler.on_batch_done()
+        self.assertEqual(scheduler.get_progress()["batches_done"], 0)
+
+        scheduler.on_task_done("2")
+        scheduler.on_batch_done()
+        self.assertEqual(scheduler.get_progress()["batches_done"], 1)
+
+
+class TestFailFastPolicy(unittest.TestCase):
+    """fail_fast 分支行为"""
+
+    def test_fail_fast_stops_future_dispatch(self):
+        graph = _build_graph([
+            TaskNode(task_id="1", name="A"),
+            TaskNode(task_id="2", name="B"),
+            TaskNode(task_id="3", name="C"),
+        ])
+        scheduler = Scheduler(
+            graph=graph,
+            config=SchedulerConfig(enabled=True, max_parallel=2, fail_fast=True),
+        )
+
+        d1 = scheduler.pick_next_batch()
+        self.assertCountEqual(d1.batch.task_ids, ["1", "2"])
+
+        scheduler.on_task_failed("1")
+        scheduler.on_task_done("2")
+
+        # fail_fast=true：即使存在待执行任务，也停止派发
+        self.assertIsNone(scheduler.pick_next_batch())
+
+        progress = scheduler.get_progress()
+        self.assertTrue(progress["fail_fast_halted"])
+        self.assertEqual(progress["pending"], 1)
+
+    def test_non_fail_fast_continues_after_failure(self):
+        graph = _build_graph([
+            TaskNode(task_id="1", name="A"),
+            TaskNode(task_id="2", name="B"),
+            TaskNode(task_id="3", name="C"),
+        ])
+        scheduler = Scheduler(
+            graph=graph,
+            config=SchedulerConfig(enabled=True, max_parallel=2, fail_fast=False),
+        )
+
+        d1 = scheduler.pick_next_batch()
+        self.assertCountEqual(d1.batch.task_ids, ["1", "2"])
+
+        scheduler.on_task_failed("1")
+        scheduler.on_task_done("2")
+
+        # fail_fast=false：允许继续派发未受影响任务
+        d2 = scheduler.pick_next_batch()
+        self.assertIsNotNone(d2)
+        self.assertEqual(d2.batch.task_ids, ["3"])
 
 
 class TestBudgetIntegration(unittest.TestCase):
@@ -258,6 +376,7 @@ class TestProgress(unittest.TestCase):
             TaskNode(task_id="2", name="B"),
         ])
         scheduler = Scheduler(graph=graph)
+        scheduler.pick_next_batch()
         scheduler.on_task_done("1", tokens_used=500, latency_ms=100)
         scheduler.on_batch_done()
         progress = scheduler.get_progress()
