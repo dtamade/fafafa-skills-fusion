@@ -25,6 +25,9 @@ class TestConfigLoader(unittest.TestCase):
         self.assertFalse(cfg["safe_backlog_enabled"])
         self.assertEqual(cfg["safe_backlog_allowed_categories"], "documentation,quality")
         self.assertEqual(cfg["safe_backlog_max_tasks_per_run"], 2)
+        self.assertFalse(cfg["supervisor_enabled"])
+        self.assertEqual(cfg["supervisor_mode"], "advisory")
+        self.assertEqual(cfg["supervisor_persona"], "Guardian")
 
     def test_parses_yaml_sections(self):
         (self.fusion_dir / "config.yaml").write_text(
@@ -88,6 +91,30 @@ class TestConfigLoader(unittest.TestCase):
         self.assertEqual(cfg["safe_backlog_novelty_window"], 9)
         self.assertEqual(cfg["safe_backlog_max_files_touched"], 6)
         self.assertEqual(cfg["safe_backlog_max_lines_changed"], 320)
+
+    def test_supervisor_config_parsing(self):
+        (self.fusion_dir / "config.yaml").write_text(
+            "runtime:\n"
+            "  enabled: true\n"
+            "supervisor:\n"
+            "  enabled: true\n"
+            "  mode: advisory\n"
+            "  persona: Sentinel\n"
+            "  trigger_no_progress_rounds: 4\n"
+            "  cadence_rounds: 3\n"
+            "  force_emit_rounds: 10\n"
+            "  max_suggestions: 3\n",
+            encoding="utf-8",
+        )
+
+        cfg = load_fusion_config(str(self.fusion_dir))
+        self.assertTrue(cfg["supervisor_enabled"])
+        self.assertEqual(cfg["supervisor_mode"], "advisory")
+        self.assertEqual(cfg["supervisor_persona"], "Sentinel")
+        self.assertEqual(cfg["supervisor_trigger_no_progress_rounds"], 4)
+        self.assertEqual(cfg["supervisor_cadence_rounds"], 3)
+        self.assertEqual(cfg["supervisor_force_emit_rounds"], 10)
+        self.assertEqual(cfg["supervisor_max_suggestions"], 3)
 
 
 if __name__ == "__main__":

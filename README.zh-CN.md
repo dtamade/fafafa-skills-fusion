@@ -145,6 +145,15 @@ safe_backlog:
   backoff_jitter: 0.2
   backoff_force_probe_rounds: 20
 
+supervisor:
+  enabled: false
+  mode: "advisory"
+  persona: "Guardian"
+  trigger_no_progress_rounds: 2
+  cadence_rounds: 2
+  force_emit_rounds: 12
+  max_suggestions: 2
+
 tdd:
   enabled: true
 
@@ -196,6 +205,15 @@ git:
 - `safe_backlog.last_injected_at_iso`
 
 并查看 `.fusion/events.jsonl` 中的 `SAFE_BACKLOG_INJECTED` 事件（含 `reason` 和 `stall_score`）。
+
+## 虚拟监督官（可选增补）
+
+Fusion 支持可选的虚拟监督官（默认关闭），用于在无进展时提供“像人一样”的提醒，但不接管主执行流程：
+
+- 当前仅支持 `advisory` 建议模式
+- 在无进展轮次达到阈值后输出建议
+- 写入 `SUPERVISOR_ADVISORY` 事件到 `.fusion/events.jsonl`
+- 不直接改动任务状态，真正托底仍由 safe backlog 执行
 
 ## 发布状态（2026-02-09）
 

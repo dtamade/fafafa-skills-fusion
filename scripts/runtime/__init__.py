@@ -64,6 +64,10 @@ from .safe_backlog import (
     generate_safe_backlog,
 )
 
+from .supervisor import (
+    generate_supervisor_advice,
+)
+
 __version__ = "2.1.0"
 __all__ = [
     # State Machine
@@ -108,4 +112,6 @@ __all__ = [
     "load_fusion_config",
     # Safe backlog
     "generate_safe_backlog",
+    # Supervisor
+    "generate_supervisor_advice",
 ]

@@ -34,6 +34,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - **codeagent-wrapper 桥接脚本**: `scripts/fusion-codeagent.sh`
   - 支持主后端调用、失败回退、会话 ID 落盘
   - 区分 `codex_session` / `claude_session`
+- **虚拟监督官（增补式 advisory）**
+  - 新模块：`scripts/runtime/supervisor.py`
+  - 默认关闭，开启后仅输出建议，不直接改任务状态
+  - 事件写入 `events.jsonl`：`SUPERVISOR_ADVISORY`
+
 - **脚本级回归测试**
   - `scripts/runtime/tests/test_fusion_codeagent_script.py`
   - `scripts/runtime/tests/test_fusion_status_script.py`

@@ -77,6 +77,15 @@ Observe fallback events via:
 - `/fusion status` (`safe_backlog.last_*`)
 - `.fusion/events.jsonl` (`SAFE_BACKLOG_INJECTED` with `reason` and `stall_score`)
 
+## Virtual Supervisor (Optional)
+
+Fusion also supports an additive virtual supervisor (default `disabled`) for human-like guidance without taking over execution:
+
+- Advisory only (`mode: advisory`) in current release.
+- Emits suggestions on repeated no-progress rounds.
+- Writes `SUPERVISOR_ADVISORY` events to `.fusion/events.jsonl`.
+- Never mutates task state directly; safe backlog remains the execution fallback.
+
 ## Configuration
 
 Edit `.fusion/config.yaml`:
@@ -99,6 +108,15 @@ safe_backlog:
   backoff_max_rounds: 32
   backoff_jitter: 0.2
   backoff_force_probe_rounds: 20
+
+supervisor:
+  enabled: false
+  mode: "advisory"
+  persona: "Guardian"
+  trigger_no_progress_rounds: 2
+  cadence_rounds: 2
+  force_emit_rounds: 12
+  max_suggestions: 2
 ```
 
 See `templates/config.yaml` for the full recommended baseline.

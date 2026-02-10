@@ -77,6 +77,16 @@ safe_backlog:
   max_files_touched: 4
   max_lines_changed: 200
 
+# 虚拟监督官配置（默认关闭，增补式 advisory）
+supervisor:
+  enabled: false
+  mode: "advisory"                # advisory (当前仅支持)
+  persona: "Guardian"
+  trigger_no_progress_rounds: 2
+  cadence_rounds: 2
+  force_emit_rounds: 12
+  max_suggestions: 2
+
 # v2.5.0 调度器配置
 scheduler:
   enabled: true            # 默认开启，可按需关闭回退串行

@@ -356,6 +356,48 @@ class TestAdaptPosttool(BaseTestCase):
         self.assertEqual(payload.get("reason"), "task_exhausted")
         self.assertIn("stall_score", payload)
 
+    def test_no_progress_emits_supervisor_advisory(self):
+        """无进展时可输出监督建议（advisory，不改主流程）"""
+        self._write_sessions({"status": "in_progress", "current_phase": "EXECUTE"})
+        self._write_task_plan("### Task 1: A [PENDING]\n")
+
+        with open(self.fusion_dir / "config.yaml", "w", encoding="utf-8") as f:
+            f.write(
+                "runtime:\n"
+                "  enabled: true\n"
+                "  compat_mode: true\n"
+                "safe_backlog:\n"
+                "  enabled: false\n"
+                "supervisor:\n"
+                "  enabled: true\n"
+                "  mode: advisory\n"
+                "  persona: Sentinel\n"
+                "  trigger_no_progress_rounds: 1\n"
+                "  cadence_rounds: 1\n"
+                "  force_emit_rounds: 12\n"
+                "  max_suggestions: 2\n"
+            )
+
+        (self.fusion_dir / ".progress_snapshot").write_text("0:1:0:0", encoding="utf-8")
+
+        result = adapt_posttool(str(self.fusion_dir))
+        self.assertFalse(result.changed)
+        self.assertTrue(any("advisory" in line.lower() for line in result.lines))
+
+        task_plan = (self.fusion_dir / "task_plan.md").read_text(encoding="utf-8")
+        self.assertNotIn("[SAFE_BACKLOG]", task_plan)
+
+        events_file = self.fusion_dir / "events.jsonl"
+        self.assertTrue(events_file.exists())
+        events = [json.loads(line) for line in events_file.read_text(encoding="utf-8").splitlines() if line.strip()]
+        advisory_events = [evt for evt in events if evt.get("type") == "SUPERVISOR_ADVISORY"]
+        self.assertTrue(advisory_events)
+        payload = advisory_events[-1].get("payload", {})
+        self.assertEqual(payload.get("mode"), "advisory")
+        self.assertIn("risk_score", payload)
+        self.assertIn("suggestions", payload)
+
+
     def test_backoff_blocks_immediate_reinjection(self):
         """指数退避冷却期间不应重复注入，冷却后才允许"""
         self._write_sessions({"status": "in_progress", "current_phase": "EXECUTE"})

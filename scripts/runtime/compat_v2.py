@@ -22,6 +22,7 @@ from .kernel import FusionKernel, KernelConfig
 from .session_store import SessionStore
 from .config import load_fusion_config
 from .safe_backlog import generate_safe_backlog, reset_safe_backlog_backoff
+from .supervisor import generate_supervisor_advice
 
 
 @dataclass
@@ -440,6 +441,37 @@ def adapt_posttool(fusion_dir: str = ".fusion") -> PosttoolResult:
         if trigger_rounds < 1:
             trigger_rounds = 1
 
+        advisory_lines = []
+        advice = generate_supervisor_advice(
+            fusion_dir=fusion_dir,
+            no_progress_rounds=unchanged,
+            counts=counts,
+            pending_like=pending_like,
+        )
+        if bool(advice.get("emit", False)):
+            line = str(advice.get("line") or "").strip()
+            if line:
+                advisory_lines.append(line)
+
+            payload = advice.get("payload") if isinstance(advice.get("payload"), dict) else {}
+            try:
+                risk_score = float(payload.get("risk_score", 0.0))
+            except (TypeError, ValueError):
+                risk_score = 0.0
+            try:
+                store.append_event(
+                    event_type="SUPERVISOR_ADVISORY",
+                    from_state=str(snapshot.get("current_phase") or "EXECUTE"),
+                    to_state=str(snapshot.get("current_phase") or "EXECUTE"),
+                    payload=payload,
+                    idempotency_key=(
+                        f"supervisor:{current_snap}:{unchanged}:"
+                        f"{int(max(0.0, min(1.0, risk_score)) * 1000)}"
+                    ),
+                )
+            except Exception:
+                pass
+
         if unchanged >= trigger_rounds and bool(cfg.get("safe_backlog_enabled", False)):
             injected = _inject_safe_backlog("no_progress", no_progress_rounds=unchanged)
             if injected.changed:
@@ -448,6 +480,9 @@ def adapt_posttool(fusion_dir: str = ".fusion") -> PosttoolResult:
                 except IOError:
                     pass
                 return injected
+
+        if advisory_lines:
+            return PosttoolResult(changed=False, lines=advisory_lines)
 
         return PosttoolResult(changed=False, lines=[])
 

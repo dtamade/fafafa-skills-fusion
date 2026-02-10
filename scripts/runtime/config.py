@@ -104,6 +104,7 @@ def load_fusion_config(fusion_dir: str = ".fusion") -> Dict[str, Any]:
     scheduler = raw.get("scheduler") if isinstance(raw.get("scheduler"), dict) else {}
     budget = raw.get("budget") if isinstance(raw.get("budget"), dict) else {}
     safe_backlog = raw.get("safe_backlog") if isinstance(raw.get("safe_backlog"), dict) else {}
+    supervisor = raw.get("supervisor") if isinstance(raw.get("supervisor"), dict) else {}
 
     execution_parallel = _to_int(execution.get("parallel"), 2)
     safe_backlog_max_tasks_per_run = _to_int(safe_backlog.get("max_tasks_per_run"), 2)
@@ -147,4 +148,11 @@ def load_fusion_config(fusion_dir: str = ".fusion") -> Dict[str, Any]:
         "safe_backlog_backoff_force_probe_rounds": _to_int(safe_backlog.get("backoff_force_probe_rounds"), 20),
         "safe_backlog_max_files_touched": _to_int(safe_backlog.get("max_files_touched"), 4),
         "safe_backlog_max_lines_changed": _to_int(safe_backlog.get("max_lines_changed"), 200),
+        "supervisor_enabled": _to_bool(supervisor.get("enabled"), False),
+        "supervisor_mode": str(supervisor.get("mode") or "advisory"),
+        "supervisor_persona": str(supervisor.get("persona") or "Guardian"),
+        "supervisor_trigger_no_progress_rounds": _to_int(supervisor.get("trigger_no_progress_rounds"), 2),
+        "supervisor_cadence_rounds": _to_int(supervisor.get("cadence_rounds"), 2),
+        "supervisor_force_emit_rounds": _to_int(supervisor.get("force_emit_rounds"), 12),
+        "supervisor_max_suggestions": _to_int(supervisor.get("max_suggestions"), 2),
     }
