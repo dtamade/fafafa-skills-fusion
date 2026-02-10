@@ -4,6 +4,54 @@ All notable changes to Fusion Skill will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+
+## [v2.6.2] - 2026-02-10
+
+> Strict batch barrier + fail-fast scheduling for safe parallel orchestration.
+
+### Added
+
+- **严格批次屏障 (Strict Batch Barrier)**
+  - 活动批次未全部结算前，不派发下一批任务
+  - 批次派发后任务标记为 `IN_PROGRESS`，避免重复派发
+- **调度可观测性增强**
+  - `get_progress()` 新增 `active_batch` 与 `fail_fast_halted`
+
+### Changed
+
+- **`pick_next_batch()` 调度语义更新**
+  - 先执行批次屏障结算，再判断是否允许继续调度
+  - `fail_fast=true` 且检测到失败时停止后续派发
+- **`on_batch_done()` 兼容行为收敛**
+  - 保留接口，只有在活动批次已结算时才推进批次计数
+
+### Verification
+
+- 调度专项测试：`46 passed`
+- 全量测试：`312 passed`
+- 对应提交：`1070413`
+
+## [v2.6.1] - 2026-02-10
+
+> Additive virtual supervisor advisory mode for long-running autonomous loops.
+
+### Added
+
+- **虚拟监督官 advisory 模式（增补式）**
+  - 新增模块：`scripts/runtime/supervisor.py`
+  - 默认关闭，开启后仅输出建议，不接管主流程
+- **compat_v2 监督建议事件**
+  - 新增 `SUPERVISOR_ADVISORY` 事件写入 `.fusion/events.jsonl`
+- **配置与测试扩展**
+  - `scripts/runtime/config.py` 增加 supervisor 配置项
+  - 新增/更新测试覆盖 supervisor + compat + config
+
+### Verification
+
+- 全量测试：`305 passed`
+- 对应提交：`d966436`
+- 发布标签：`v2.6.1`
+
 ## [v2.6.0] - 2026-02-09
 
 > 收尾发布版本：启动闭环、UNDERSTAND 执行器、运行时配置统一、脚本可观测性增强
