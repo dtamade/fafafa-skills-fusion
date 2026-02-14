@@ -14,17 +14,137 @@ FUSION_DIR=".fusion"
 SNAPSHOT_FILE="$FUSION_DIR/.progress_snapshot"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Fast exit: no fusion directory
-[ -d "$FUSION_DIR" ] || exit 0
-[ -f "$FUSION_DIR/sessions.json" ] || exit 0
+is_truthy() {
+    case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
+        1|true|yes|on)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
 
-# --- Runtime v2.1 adapter ---
-# If runtime is enabled, delegate to Python compat_v2 module.
-# Also trigger state machine events for task transitions.
-if [ -f "$FUSION_DIR/config.yaml" ] && grep -q 'enabled: *true' "$FUSION_DIR/config.yaml" 2>/dev/null; then
+HOOK_DEBUG=false
+if is_truthy "${FUSION_HOOK_DEBUG:-}" || [ -f "$FUSION_DIR/.hook_debug" ]; then
+    HOOK_DEBUG=true
+fi
+
+hook_debug_log() {
+    [ "$HOOK_DEBUG" = true ] || return 0
+    local message="$1"
+    local ts
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local line="[fusion][hook-debug][posttool][$ts] $message"
+    echo "$line" >&2
+    if [ -d "$FUSION_DIR" ]; then
+        echo "$line" >> "$FUSION_DIR/hook-debug.log" 2>/dev/null || true
+    fi
+}
+
+resolve_fusion_bridge_bin() {
+    if [ -n "${FUSION_BRIDGE_BIN:-}" ] && [ -x "$FUSION_BRIDGE_BIN" ]; then
+        echo "$FUSION_BRIDGE_BIN"
+        return 0
+    fi
+
+    if command -v fusion-bridge >/dev/null 2>&1; then
+        command -v fusion-bridge
+        return 0
+    fi
+
+    local candidates=(
+        "$SCRIPT_DIR/../rust/target/release/fusion-bridge"
+        "$SCRIPT_DIR/../rust/target/debug/fusion-bridge"
+    )
+
+    local candidate
+    for candidate in "${candidates[@]}"; do
+        if [ -x "$candidate" ]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+runtime_engine_is_rust() {
+    [ -f "$FUSION_DIR/config.yaml" ] || return 1
+    grep -Eq 'engine:[[:space:]]*"?rust"?' "$FUSION_DIR/config.yaml" 2>/dev/null
+}
+
+runtime_enabled_in_config() {
+    [ -f "$FUSION_DIR/config.yaml" ] || return 1
+
+    awk '
+    BEGIN { in_runtime = 0; found = 0 }
+    /^[[:space:]]*#/ { next }
+    /^[^[:space:]#][^:]*:[[:space:]]*$/ {
+        key = $0
+        sub(/[[:space:]]*:[[:space:]]*$/, "", key)
+        in_runtime = (key == "runtime")
+        next
+    }
+    in_runtime && /^[[:space:]]+enabled:[[:space:]]*/ {
+        value = $0
+        sub(/^[[:space:]]+enabled:[[:space:]]*/, "", value)
+        sub(/[[:space:]]*#.*/, "", value)
+        gsub(/[[:space:]\"]/, "", value)
+        if (tolower(value) == "true") {
+            found = 1
+        }
+        exit
+    }
+    /^[^[:space:]#]/ {
+        in_runtime = 0
+    }
+    END { exit(found ? 0 : 1) }
+    ' "$FUSION_DIR/config.yaml" 2>/dev/null
+}
+
+# Fast exit: no fusion directory
+if [ ! -d "$FUSION_DIR" ]; then
+    hook_debug_log "skip: .fusion missing"
+    exit 0
+fi
+if [ ! -f "$FUSION_DIR/sessions.json" ]; then
+    hook_debug_log "skip: sessions.json missing"
+    exit 0
+fi
+
+hook_debug_log "invoked: cwd=$(pwd)"
+
+# Read hook input from stdin (PostToolUse hook protocol)
+# Input contains: {"tool_name": "...", "tool_input": {...}}
+HOOK_INPUT=$(cat)
+
+# --- Runtime adapter ---
+# If runtime.enabled is true, prefer Rust bridge when runtime.engine=rust, else Python compat_v2.
+# Falls back to legacy Shell logic if runtime adapter fails.
+if runtime_enabled_in_config; then
+    hook_debug_log "runtime-adapter: enabled"
+    if runtime_engine_is_rust; then
+        hook_debug_log "runtime-adapter: engine=rust"
+        BRIDGE_BIN=""
+        if BRIDGE_BIN="$(resolve_fusion_bridge_bin 2>/dev/null)"; then
+            if OUTPUT=$("$BRIDGE_BIN" hook posttool --fusion-dir "$FUSION_DIR" 2>/dev/null); then
+                hook_debug_log "runtime-adapter: rust bridge ok"
+                [ -n "$OUTPUT" ] && echo "$OUTPUT"
+                exit 0
+            fi
+            hook_debug_log "runtime-adapter: rust bridge failed"
+        else
+            hook_debug_log "runtime-adapter: rust bridge missing"
+        fi
+    fi
+
     # Get posttool output
     if OUTPUT=$(PYTHONPATH="$SCRIPT_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 -m runtime.compat_v2 posttool "$FUSION_DIR" 2>/dev/null); then
+        hook_debug_log "runtime-adapter: python compat ok"
         echo "$OUTPUT"
+    else
+        hook_debug_log "runtime-adapter: python compat failed"
     fi
     # Trigger state machine events based on task state changes
     # This is done regardless of posttool output success
@@ -67,9 +187,10 @@ elif kernel.current_state == State.EXECUTE and completed > 0:
             kernel.context.completed_tasks = completed
             kernel.dispatch(Event.TASK_DONE)
 PYEOF
+    hook_debug_log "runtime-adapter: done, state-event bridge attempted"
     exit 0
 fi
-# Python failed or not enabled - fall through to Shell logic
+# Runtime adapter failed or disabled - fall through to Shell logic
 
 # --- JSON parsing helper ---
 json_get() {
@@ -83,7 +204,10 @@ json_get() {
 
 # Read status
 STATUS=$(json_get "$FUSION_DIR/sessions.json" "status")
-[ "$STATUS" = "in_progress" ] || exit 0
+if [ "$STATUS" != "in_progress" ]; then
+    hook_debug_log "skip: status=$STATUS"
+    exit 0
+fi
 
 # --- Active workflow: detect progress changes ---
 
@@ -113,6 +237,7 @@ fi
 echo "$CURRENT_SNAPSHOT" > "$SNAPSHOT_FILE" 2>/dev/null || true
 
 # Compare: did anything change?
+hook_debug_log "active: snapshot=$CURRENT_SNAPSHOT prev=${PREV_SNAPSHOT:-none}"
 if [ "$CURRENT_SNAPSHOT" = "$PREV_SNAPSHOT" ]; then
     # No task status change — check if code files were changed
     # but task_plan.md wasn't updated (common oversight)
@@ -131,12 +256,14 @@ if [ "$CURRENT_SNAPSHOT" = "$PREV_SNAPSHOT" ]; then
 
     # After 5 consecutive Write/Edit calls without progress update → remind
     if [ "$UNCHANGED" -ge 5 ] && [ "$TOTAL" -gt 0 ]; then
+        hook_debug_log "no-progress: unchanged=$UNCHANGED total=$TOTAL"
         CURRENT_TASK=$(grep '\[IN_PROGRESS\]' "$FUSION_DIR/task_plan.md" 2>/dev/null | head -1 | sed 's/### Task [0-9]*: //' | sed 's/ \[.*//')
         echo "[fusion] Info: ${UNCHANGED} file edits since last task status change."
         if [ -n "$CURRENT_TASK" ]; then
             echo "[fusion] Current: ${CURRENT_TASK} [IN_PROGRESS] | When done, mark [COMPLETED] in task_plan.md"
         fi
     fi
+    hook_debug_log "done: no task status changes"
     exit 0
 fi
 
@@ -162,6 +289,7 @@ COMPLETED_DELTA=$((COMPLETED - PREV_COMPLETED))
 FAILED_DELTA=$((FAILED - PREV_FAILED))
 
 if [ "$COMPLETED_DELTA" -gt 0 ]; then
+    hook_debug_log "task-delta: completed_delta=$COMPLETED_DELTA"
     # A task was completed
     # Find the most recently completed task (last COMPLETED entry)
     JUST_COMPLETED=$(grep '\[COMPLETED\]' "$FUSION_DIR/task_plan.md" 2>/dev/null | tail -1 | sed 's/### Task [0-9]*: //' | sed 's/ \[.*//')
@@ -190,8 +318,10 @@ if [ "$COMPLETED_DELTA" -gt 0 ]; then
 fi
 
 if [ "$FAILED_DELTA" -gt 0 ]; then
+    hook_debug_log "task-delta: failed_delta=$FAILED_DELTA"
     JUST_FAILED=$(grep '\[FAILED\]' "$FUSION_DIR/task_plan.md" 2>/dev/null | tail -1 | sed 's/### Task [0-9]*: //' | sed 's/ \[.*//')
     echo "[fusion] Task ${JUST_FAILED:-?} → FAILED. Apply 3-Strike protocol."
 fi
 
+hook_debug_log "done: progress processed"
 exit 0

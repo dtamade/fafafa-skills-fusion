@@ -15,19 +15,137 @@
 FUSION_DIR=".fusion"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+is_truthy() {
+    case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
+        1|true|yes|on)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+HOOK_DEBUG=false
+if is_truthy "${FUSION_HOOK_DEBUG:-}" || [ -f "$FUSION_DIR/.hook_debug" ]; then
+    HOOK_DEBUG=true
+fi
+
+hook_debug_log() {
+    [ "$HOOK_DEBUG" = true ] || return 0
+    local message="$1"
+    local ts
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local line="[fusion][hook-debug][pretool][$ts] $message"
+    echo "$line" >&2
+    if [ -d "$FUSION_DIR" ]; then
+        echo "$line" >> "$FUSION_DIR/hook-debug.log" 2>/dev/null || true
+    fi
+}
+
+resolve_fusion_bridge_bin() {
+    if [ -n "${FUSION_BRIDGE_BIN:-}" ] && [ -x "$FUSION_BRIDGE_BIN" ]; then
+        echo "$FUSION_BRIDGE_BIN"
+        return 0
+    fi
+
+    if command -v fusion-bridge >/dev/null 2>&1; then
+        command -v fusion-bridge
+        return 0
+    fi
+
+    local candidates=(
+        "$SCRIPT_DIR/../rust/target/release/fusion-bridge"
+        "$SCRIPT_DIR/../rust/target/debug/fusion-bridge"
+    )
+
+    local candidate
+    for candidate in "${candidates[@]}"; do
+        if [ -x "$candidate" ]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+runtime_engine_is_rust() {
+    [ -f "$FUSION_DIR/config.yaml" ] || return 1
+    grep -Eq 'engine:[[:space:]]*"?rust"?' "$FUSION_DIR/config.yaml" 2>/dev/null
+}
+
+runtime_enabled_in_config() {
+    [ -f "$FUSION_DIR/config.yaml" ] || return 1
+
+    awk '
+    BEGIN { in_runtime = 0; found = 0 }
+    /^[[:space:]]*#/ { next }
+    /^[^[:space:]#][^:]*:[[:space:]]*$/ {
+        key = $0
+        sub(/[[:space:]]*:[[:space:]]*$/, "", key)
+        in_runtime = (key == "runtime")
+        next
+    }
+    in_runtime && /^[[:space:]]+enabled:[[:space:]]*/ {
+        value = $0
+        sub(/^[[:space:]]+enabled:[[:space:]]*/, "", value)
+        sub(/[[:space:]]*#.*/, "", value)
+        gsub(/[[:space:]\"]/, "", value)
+        if (tolower(value) == "true") {
+            found = 1
+        }
+        exit
+    }
+    /^[^[:space:]#]/ {
+        in_runtime = 0
+    }
+    END { exit(found ? 0 : 1) }
+    ' "$FUSION_DIR/config.yaml" 2>/dev/null
+}
+
 # Fast exit: no fusion directory → not in a workflow
-[ -d "$FUSION_DIR" ] || exit 0
+if [ ! -d "$FUSION_DIR" ]; then
+    hook_debug_log "skip: .fusion missing"
+    exit 0
+fi
 
 # Fast exit: no sessions.json → not initialized
-[ -f "$FUSION_DIR/sessions.json" ] || exit 0
+if [ ! -f "$FUSION_DIR/sessions.json" ]; then
+    hook_debug_log "skip: sessions.json missing"
+    exit 0
+fi
 
-# --- Runtime v2.1 adapter ---
-# If runtime is enabled, delegate to Python compat_v2 module.
-if [ -f "$FUSION_DIR/config.yaml" ] && grep -q 'enabled: *true' "$FUSION_DIR/config.yaml" 2>/dev/null; then
+hook_debug_log "invoked: cwd=$(pwd)"
+
+# Read hook input from stdin (PreToolUse hook protocol)
+# Input contains: {"tool_name": "...", "tool_input": {...}}
+HOOK_INPUT=$(cat)
+
+# --- Runtime adapter ---
+# If runtime.enabled is true, prefer Rust bridge when runtime.engine=rust, else Python compat_v2.
+if runtime_enabled_in_config; then
+    hook_debug_log "runtime-adapter: enabled"
+    if runtime_engine_is_rust; then
+        hook_debug_log "runtime-adapter: engine=rust"
+        BRIDGE_BIN=""
+        if BRIDGE_BIN="$(resolve_fusion_bridge_bin 2>/dev/null)"; then
+            if "$BRIDGE_BIN" hook pretool --fusion-dir "$FUSION_DIR" 2>/dev/null; then
+                hook_debug_log "runtime-adapter: rust bridge ok"
+                exit 0
+            fi
+            hook_debug_log "runtime-adapter: rust bridge failed"
+        else
+            hook_debug_log "runtime-adapter: rust bridge missing"
+        fi
+    fi
+
     if PYTHONPATH="$SCRIPT_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 -m runtime.compat_v2 pretool "$FUSION_DIR" 2>/dev/null; then
+        hook_debug_log "runtime-adapter: python compat ok"
         exit 0
     fi
-    # Python failed - fall through to Shell logic
+    hook_debug_log "runtime-adapter: failed, fallback=shell"
+    # Runtime adapter failed - fall through to Shell logic
 fi
 
 # --- Cross-platform Unicode detection ---
@@ -66,7 +184,10 @@ json_get() {
 STATUS=$(json_get "$FUSION_DIR/sessions.json" "status")
 
 # Fast exit: not in_progress → workflow inactive
-[ "$STATUS" = "in_progress" ] || exit 0
+if [ "$STATUS" != "in_progress" ]; then
+    hook_debug_log "skip: status=$STATUS"
+    exit 0
+fi
 
 # --- Active workflow: build context summary ---
 
@@ -167,6 +288,8 @@ fi
 
 # --- Output compact summary ---
 
+hook_debug_log "active: phase=$PHASE completed=$COMPLETED pending=$PENDING in_progress=$IN_PROGRESS failed=$FAILED task=${CURRENT_TASK:-none}"
+
 echo "[fusion] Goal: ${GOAL:-?} | Phase: $PHASE ($PHASE_NUM)"
 
 if [ "$TOTAL" -gt 0 ] && [ -n "$CURRENT_TASK" ]; then
@@ -183,4 +306,5 @@ if [ -n "$GUIDANCE" ]; then
     echo "[fusion] → $GUIDANCE"
 fi
 
+hook_debug_log "done: emitted-summary"
 exit 0
