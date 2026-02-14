@@ -320,7 +320,7 @@ class TestSessionStoreSnapshot(unittest.TestCase):
             data = json.load(f)
 
         self.assertEqual(data["current_phase"], "INITIALIZE")
-        self.assertEqual(data["_runtime"]["version"], "2.1.0")
+        self.assertEqual(data["_runtime"]["version"], "2.6.3")
         self.assertEqual(data["_runtime"]["state"], "INITIALIZE")
         self.assertEqual(data["_runtime"]["last_event_id"], "evt_000001")
 

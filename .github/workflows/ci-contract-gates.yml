@@ -1,0 +1,107 @@
+name: CI Contract Gates
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  contract-gates:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust -> target
+
+      - name: Install Python test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+
+      - name: Machine mode smoke gate
+        run: |
+          bash scripts/release-contract-audit.sh --dry-run --json --fast --skip-rust > /tmp/release-audit-dry-run.json
+          python3 scripts/runtime/regression_runner.py --list-suites --json > /tmp/runner-suites.json
+          python3 scripts/runtime/regression_runner.py --suite contract --json --min-pass-rate 0.99 > /tmp/runner-contract.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          runner_contract = json.loads(Path('/tmp/runner-contract.json').read_text(encoding='utf-8'))
+          required_runner = [
+              'schema_version',
+              'result',
+              'suite',
+              'scenario_results',
+              'longest_scenario',
+              'fastest_scenario',
+              'scenario_count_by_result',
+              'duration_stats',
+              'failed_rate',
+              'success_rate',
+              'success_count',
+              'failure_count',
+              'total_scenarios',
+              'rate_basis',
+          ]
+          missing_runner = [key for key in required_runner if key not in runner_contract]
+          if missing_runner:
+              raise SystemExit(f"runner-contract.json missing keys: {missing_runner}")
+          if runner_contract['rate_basis'] != runner_contract['total_scenarios']:
+              raise SystemExit("runner-contract.json rate_basis mismatch total_scenarios")
+
+          release_dry_run = json.loads(Path('/tmp/release-audit-dry-run.json').read_text(encoding='utf-8'))
+          required_release = ['schema_version', 'result', 'flags', 'commands', 'steps_executed', 'failed_commands', 'failed_commands_count', 'error_step_count', 'success_steps_count', 'commands_count', 'step_rate_basis', 'command_rate_basis', 'success_rate', 'failed_rate', 'success_command_rate', 'failed_command_rate']
+          missing_release = [key for key in required_release if key not in release_dry_run]
+          if missing_release:
+              raise SystemExit(f"release-audit-dry-run.json missing keys: {missing_release}")
+          if release_dry_run['step_rate_basis'] != release_dry_run['steps_executed']:
+              raise SystemExit("release-audit-dry-run.json step_rate_basis mismatch steps_executed")
+          if release_dry_run['command_rate_basis'] != release_dry_run['commands_count']:
+              raise SystemExit("release-audit-dry-run.json command_rate_basis mismatch commands_count")
+
+          runner_suites = json.loads(Path('/tmp/runner-suites.json').read_text(encoding='utf-8'))
+          required_suites = ['result', 'default_suite', 'suites']
+          missing_suites = [key for key in required_suites if key not in runner_suites]
+          if missing_suites:
+              raise SystemExit(f"runner-suites.json missing keys: {missing_suites}")
+          PY
+
+      - name: Upload machine JSON artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: machine-smoke-json
+          path: |
+            /tmp/release-audit-dry-run.json
+            /tmp/runner-suites.json
+            /tmp/runner-contract.json
+
+      - name: Shell syntax gate
+        run: bash -n scripts/*.sh
+
+      - name: Python tests gate
+        run: pytest -q
+
+      - name: Rust clippy gate
+        run: |
+          cd rust
+          cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Rust fmt gate
+        run: |
+          cd rust
+          cargo fmt --all -- --check

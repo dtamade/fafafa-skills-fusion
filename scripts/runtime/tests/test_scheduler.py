@@ -302,7 +302,7 @@ class TestRoutingIntegration(unittest.TestCase):
         decision = scheduler.pick_next_batch()
         self.assertIn("1", decision.routing)
         self.assertIn("2", decision.routing)
-        self.assertEqual(decision.routing["1"].backend, "codex")
+        self.assertEqual(decision.routing["1"].backend, "claude")
         self.assertEqual(decision.routing["2"].backend, "claude")
 
 

@@ -104,6 +104,8 @@ compute_md5() {
 guardian_init() {
     [ "$GUARDIAN_JQ_AVAILABLE" = true ] || return 1
 
+    mkdir -p "$FUSION_DIR"
+
     if [ ! -f "$LOOP_CONTEXT_FILE" ]; then
         local now_ms
         now_ms=$(get_timestamp_ms)
@@ -347,15 +349,30 @@ guardian_status() {
     [ "$GUARDIAN_JQ_AVAILABLE" = true ] || { echo "LoopGuardian: jq not available"; return; }
     [ -f "$LOOP_CONTEXT_FILE" ] || { echo "LoopGuardian: not initialized"; return; }
 
-    jq -r '
+    jq -r \
+        --arg max_iterations "${GUARDIAN_MAX_ITERATIONS:-50}" \
+        --arg max_no_progress "${GUARDIAN_MAX_NO_PROGRESS:-6}" \
+        --arg max_same_action "${GUARDIAN_MAX_SAME_ACTION:-3}" \
+        --arg max_same_error "${GUARDIAN_MAX_SAME_ERROR:-3}" \
+        --arg max_state_visits "${GUARDIAN_MAX_STATE_VISITS:-8}" \
+        --arg max_wall_time_ms "${GUARDIAN_MAX_WALL_TIME_MS:-7200000}" \
+        '
+        ($max_iterations | tonumber? // 50) as $mi |
+        ($max_no_progress | tonumber? // 6) as $mnp |
+        ($max_same_action | tonumber? // 3) as $msa |
+        ($max_same_error | tonumber? // 3) as $mse |
+        ($max_state_visits | tonumber? // 8) as $msv |
+        ($max_wall_time_ms | tonumber? // 7200000) as $mwt |
         "LoopGuardian Status:",
-        "  Iterations: \(.metrics.total_iterations)/\(env.GUARDIAN_MAX_ITERATIONS // 50)",
-        "  No-Progress Rounds: \(.metrics.no_progress_rounds)/\(env.GUARDIAN_MAX_NO_PROGRESS // 6)",
-        "  Same Action Count: \(.metrics.same_action_count)/\(env.GUARDIAN_MAX_SAME_ACTION // 3)",
-        "  Same Error Count: \(.metrics.same_error_count)/\(env.GUARDIAN_MAX_SAME_ERROR // 3)",
-        "  Wall Time: \((.metrics.wall_time_ms / 1000 | floor))s"
+        "  Iterations: \(.metrics.total_iterations)/\($mi)",
+        "  No-Progress Rounds: \(.metrics.no_progress_rounds)/\($mnp)",
+        "  Same Action Count: \(.metrics.same_action_count)/\($msa)",
+        "  Same Error Count: \(.metrics.same_error_count)/\($mse)",
+        "  State Visits: \(.metrics.max_state_visit_count)/\($msv)",
+        "  Wall Time: \((.metrics.wall_time_ms / 1000 | floor))s/\(($mwt / 1000 | floor))s"
     ' "$LOOP_CONTEXT_FILE" 2>/dev/null || echo "LoopGuardian: error reading status"
 }
+
 
 # Reset loop context (call when workflow restarts or user intervenes)
 guardian_reset() {

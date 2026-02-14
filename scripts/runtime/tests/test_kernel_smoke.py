@@ -188,7 +188,7 @@ class TestKernelPersistence(unittest.TestCase):
 
         self.assertEqual(data["current_phase"], "INITIALIZE")
         self.assertIn("_runtime", data)
-        self.assertEqual(data["_runtime"]["version"], "2.1.0")
+        self.assertEqual(data["_runtime"]["version"], "2.6.3")
 
     def test_events_logged(self):
         """事件被记录到日志"""
@@ -286,8 +286,8 @@ class TestCreateKernel(unittest.TestCase):
         decision = kernel.get_next_batch()
         self.assertIsNotNone(decision)
         task_id = decision.batch.task_ids[0]
-        # implementation 类型默认仍路由 codex（即使 primary=claude）
-        self.assertEqual(decision.routing[task_id].backend, "codex")
+        # implementation 类型默认路由 claude（执行写码优先宿主）
+        self.assertEqual(decision.routing[task_id].backend, "claude")
 
 
 if __name__ == "__main__":

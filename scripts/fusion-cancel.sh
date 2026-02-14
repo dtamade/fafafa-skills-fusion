@@ -6,6 +6,20 @@ FUSION_DIR=".fusion"
 STATE_LOCK="${FUSION_DIR}/.state.lock"
 LOCK_STALE_SECONDS=300  # 5 minutes
 LOCK_ACQUIRED=false
+if [ "$#" -gt 0 ]; then
+    case "$1" in
+        -h|--help)
+            echo "Usage: fusion-cancel.sh"
+            exit 0
+            ;;
+        *)
+            echo "❌ Unknown option: $1" >&2
+            echo "Usage: fusion-cancel.sh" >&2
+            exit 1
+            ;;
+    esac
+fi
+
 
 # Check if lock is stale
 is_lock_stale() {

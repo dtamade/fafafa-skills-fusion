@@ -19,6 +19,27 @@ Give it a goal, and it plans, executes, verifies, and reports with minimal inter
 UNDERSTAND -> INITIALIZE -> ANALYZE -> DECOMPOSE -> EXECUTE -> VERIFY -> REVIEW -> COMMIT -> DELIVER
 ```
 
+## Default Backend Routing
+
+Fusion now uses role-based routing by default:
+
+- Planning/analysis/review phases -> `codex`
+- Execution/commit/delivery phases -> `claude`
+- During `EXECUTE`, task type overrides:
+  - `implementation`, `verification` -> `claude`
+  - `design`, `research` -> `codex`
+  - `documentation`, `configuration` -> `claude`
+
+- Team role source priority:
+  1. `FUSION_AGENT_ROLE` env override
+  2. task metadata `- Owner:` (or `- Role:`) in `task_plan.md`
+  3. phase default (`planner`/`coder`/`reviewer`)
+- Role to backend mapping:
+  - `planner` -> `codex`
+  - `coder` -> `claude`
+  - `reviewer` -> `codex`
+- Session isolation uses role-aware keys, e.g. `planner_codex_session`, `coder_claude_session` (legacy keys remain compatible).
+
 ## Quick Start
 
 ### Start a workflow
@@ -45,12 +66,14 @@ Fusion will:
 | `/fusion pause` | Pause current run |
 | `/fusion cancel` | Cancel current run |
 | `/fusion logs` | View execution logs |
+| `/fusion achievements` | Show achievement summary and leaderboard |
 
 ### Script fallback (if slash commands are unavailable)
 
 ```bash
 bash scripts/fusion-start.sh "implement user authentication"
 bash scripts/fusion-status.sh
+bash scripts/fusion-achievements.sh
 ```
 
 ## Safe Backlog (Anti-Stall)
@@ -94,6 +117,21 @@ Edit `.fusion/config.yaml`:
 runtime:
   enabled: true
   compat_mode: true
+  engine: "python"  # python | rust
+
+backends:
+  primary: codex
+  fallback: claude
+
+backend_routing:
+  phase_routing:
+    EXECUTE: claude
+    REVIEW: codex
+  task_type_routing:
+    implementation: claude
+    verification: claude
+    design: codex
+    documentation: claude
 
 understand:
   pass_threshold: 7
@@ -138,6 +176,7 @@ Fusion now attempts dependency recovery before failing hard:
   - `~/.npm-global/bin/codeagent-wrapper`.
 - Auto-detects Python runtime from `python3` or `python`.
 - If unresolved, writes `.fusion/dependency_report.json` with actionable next steps for people or agents.
+- If primary+fallback backend invocation both fail, writes `.fusion/backend_failure_report.json` with backend/error context.
 
 You can inspect unresolved dependency state with:
 
@@ -146,6 +185,53 @@ You can inspect unresolved dependency state with:
 ```
 
 Look for the `## Dependency Report` section in the output.
+If backend invocation fails twice, also check `## Backend Failure Report`.
+
+
+## Hook Doctor Quick Fix
+
+If hooks look unhealthy or the session exits unexpectedly, run:
+
+```bash
+bash scripts/fusion-hook-doctor.sh --json --fix .
+```
+
+Then re-check health:
+
+```bash
+bash scripts/fusion-hook-doctor.sh --json .
+```
+
+`result=ok` and `warn_count=0` indicate hook wiring is healthy.
+
+
+After first-time auto-fix, open `/hooks` to approve changes, then restart the Claude Code session once.
+
+## Hook Debug Visibility
+
+When you want to verify hook triggering directly in Claude Code output:
+
+```bash
+# Enable hook debug (persistent for this project)
+touch .fusion/.hook_debug
+
+# Disable hook debug
+rm -f .fusion/.hook_debug
+```
+
+With debug enabled, hooks emit stderr lines like:
+
+- `[fusion][hook-debug][pretool] ...`
+- `[fusion][hook-debug][posttool] ...`
+- `[fusion][hook-debug][stop] ...`
+
+You can inspect recent hook debug logs via:
+
+```bash
+/fusion status
+# or
+tail -n 50 .fusion/hook-debug.log
+```
 
 ## Project Docs
 
@@ -155,6 +241,9 @@ Look for the `## Dependency Report` section in the output.
 - [`SESSION_RECOVERY.md`](SESSION_RECOVERY.md): resume and recovery behavior
 - [`CHANGELOG.md`](CHANGELOG.md): release history
 - [`docs/HOOKS_SETUP.md`](docs/HOOKS_SETUP.md): host hook wiring notes
+- [`docs/E2E_EXAMPLE.md`](docs/E2E_EXAMPLE.md): end-to-end workflow sample
+- [`.claude/settings.example.json`](.claude/settings.example.json): standard hook template
+- [`rust/README.md`](rust/README.md): Rust bridge MVP usage
 - [`docs/RUST_FUSION_BRIDGE_ROADMAP.md`](docs/RUST_FUSION_BRIDGE_ROADMAP.md): Rust binary migration roadmap
 
 ## Development
@@ -193,3 +282,37 @@ Please read:
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
+
+## CI & Release Contract Gates
+
+Fusion includes a CI gate workflow at `.github/workflows/ci-contract-gates.yml`.
+
+Run release contract audit locally before merge:
+
+```bash
+bash scripts/release-contract-audit.sh --dry-run
+bash scripts/release-contract-audit.sh
+```
+
+Useful flags:
+- `--fast`: skip full `pytest -q`
+- `--skip-rust`: skip rust clippy/fmt
+- `--skip-python`: skip pytest gates
+
+Machine-readable examples:
+
+```bash
+bash scripts/release-contract-audit.sh --dry-run --json --json-pretty --fast --skip-rust
+python3 scripts/runtime/regression_runner.py --list-suites --json
+```
+
+Machine JSON key highlights:
+- release audit payload: `schema_version`, `step_rate_basis`, `command_rate_basis`
+- runner contract payload: `schema_version`, `rate_basis` (equals `total_scenarios`)
+- denominator semantics: `step_rate_basis=total_steps`, `command_rate_basis=total_commands`, `rate_basis=total_scenarios`
+- current schema contract: `schema_version=v1`
+
+CI machine artifact examples:
+- `/tmp/release-audit-dry-run.json`
+- `/tmp/runner-suites.json`
+- `/tmp/runner-contract.json`

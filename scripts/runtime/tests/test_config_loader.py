@@ -1,9 +1,14 @@
 """runtime.config 配置加载测试"""
 
+import sys
 import unittest
 import tempfile
 import shutil
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+import runtime.config as config_module
 
 from runtime.config import load_fusion_config, load_raw_config
 
@@ -21,9 +26,12 @@ class TestConfigLoader(unittest.TestCase):
         cfg = load_fusion_config(str(self.fusion_dir))
         self.assertFalse(cfg["runtime_enabled"])
         self.assertEqual(cfg["backend_primary"], "codex")
+        self.assertEqual(cfg["backend_phase_routing"]["EXECUTE"], "claude")
+        self.assertEqual(cfg["backend_phase_routing"]["REVIEW"], "codex")
+        self.assertEqual(cfg["backend_task_type_routing"]["implementation"], "claude")
         self.assertEqual(cfg["scheduler_max_parallel"], 2)
-        self.assertFalse(cfg["safe_backlog_enabled"])
-        self.assertEqual(cfg["safe_backlog_allowed_categories"], "documentation,quality")
+        self.assertTrue(cfg["safe_backlog_enabled"])
+        self.assertEqual(cfg["safe_backlog_allowed_categories"], "quality,documentation,optimization")
         self.assertEqual(cfg["safe_backlog_max_tasks_per_run"], 2)
         self.assertFalse(cfg["supervisor_enabled"])
         self.assertEqual(cfg["supervisor_mode"], "advisory")
@@ -31,6 +39,7 @@ class TestConfigLoader(unittest.TestCase):
         self.assertEqual(cfg["understand_pass_threshold"], 7)
         self.assertFalse(cfg["understand_require_confirmation"])
         self.assertEqual(cfg["understand_max_questions"], 2)
+        self.assertEqual(cfg["runtime_version"], "2.6.3")
 
     def test_parses_yaml_sections(self):
         (self.fusion_dir / "config.yaml").write_text(
@@ -57,6 +66,8 @@ class TestConfigLoader(unittest.TestCase):
         self.assertTrue(cfg["runtime_enabled"])
         self.assertFalse(cfg["runtime_compat_mode"])
         self.assertEqual(cfg["backend_primary"], "claude")
+        self.assertEqual(cfg["backend_phase_routing"]["EXECUTE"], "claude")
+        self.assertEqual(cfg["backend_task_type_routing"]["implementation"], "claude")
         self.assertEqual(cfg["execution_parallel"], 5)
         self.assertTrue(cfg["scheduler_enabled"])
         self.assertEqual(cfg["scheduler_max_parallel"], 4)
@@ -85,6 +96,56 @@ class TestConfigLoader(unittest.TestCase):
         )
         raw = load_raw_config(str(self.fusion_dir))
         self.assertIn("runtime", raw)
+
+    def test_minimal_parser_supports_nested_backend_routing(self):
+        (self.fusion_dir / "config.yaml").write_text(
+            "backend_routing:\n"
+            "  phase_routing:\n"
+            "    EXECUTE: codex\n"
+            "  task_type_routing:\n"
+            "    implementation: codex\n",
+            encoding="utf-8",
+        )
+
+        original_loader = config_module.load_raw_config
+        try:
+            config_module.load_raw_config = lambda _fusion_dir=".fusion": config_module._minimal_parse_yaml(  # type: ignore[attr-defined]
+                self.fusion_dir / "config.yaml"
+            )
+            cfg = load_fusion_config(str(self.fusion_dir))
+        finally:
+            config_module.load_raw_config = original_loader
+
+        self.assertEqual(cfg["backend_phase_routing"]["EXECUTE"], "codex")
+        self.assertEqual(cfg["backend_task_type_routing"]["implementation"], "codex")
+
+    def test_minimal_parser_handles_booleans_numbers_and_quotes(self):
+        (self.fusion_dir / "config.yaml").write_text(
+            "runtime:\n"
+            "  enabled: true\n"
+            "  compat_mode: false\n"
+            "  version: \"2.6.3\"\n"
+            "budget:\n"
+            "  warning_threshold: 0.7\n"
+            "  global_token_limit: 123\n",
+            encoding="utf-8",
+        )
+
+        original_yaml = sys.modules.get("yaml")
+        try:
+            sys.modules["yaml"] = None
+            cfg = load_fusion_config(str(self.fusion_dir))
+        finally:
+            if original_yaml is not None:
+                sys.modules["yaml"] = original_yaml
+            else:
+                sys.modules.pop("yaml", None)
+
+        self.assertTrue(cfg["runtime_enabled"])
+        self.assertFalse(cfg["runtime_compat_mode"])
+        self.assertEqual(cfg["runtime_version"], "2.6.3")
+        self.assertAlmostEqual(cfg["budget_warning_threshold"], 0.7)
+        self.assertEqual(cfg["budget_global_token_limit"], 123)
 
     def test_safe_backlog_config_parsing(self):
         (self.fusion_dir / "config.yaml").write_text(

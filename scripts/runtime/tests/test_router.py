@@ -19,16 +19,16 @@ class TestDefaultRouting(unittest.TestCase):
     def setUp(self):
         self.router = Router()
 
-    def test_implementation_to_codex(self):
+    def test_implementation_to_claude(self):
         task = TaskNode(task_id="1", name="A", task_type="implementation")
         decision = self.router.route(task)
-        self.assertEqual(decision.backend, "codex")
+        self.assertEqual(decision.backend, "claude")
         self.assertIn("type_rule", decision.reason)
 
-    def test_verification_to_codex(self):
+    def test_verification_to_claude(self):
         task = TaskNode(task_id="2", name="B", task_type="verification")
         decision = self.router.route(task)
-        self.assertEqual(decision.backend, "codex")
+        self.assertEqual(decision.backend, "claude")
 
     def test_documentation_to_claude(self):
         task = TaskNode(task_id="3", name="C", task_type="documentation")
@@ -129,7 +129,7 @@ class TestBudgetAwareRouting(unittest.TestCase):
             task_id="1", name="A", task_type="implementation",
         )
         decision = router.route(task)
-        self.assertEqual(decision.backend, "codex")
+        self.assertEqual(decision.backend, "claude")
         self.assertIn("type_rule", decision.reason)
 
 
@@ -144,7 +144,7 @@ class TestRouteBatch(unittest.TestCase):
         ]
         decisions = router.route_batch(tasks)
         self.assertEqual(len(decisions), 2)
-        self.assertEqual(decisions["1"].backend, "codex")
+        self.assertEqual(decisions["1"].backend, "claude")
         self.assertEqual(decisions["2"].backend, "claude")
 
 

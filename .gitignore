@@ -3,3 +3,8 @@
 # Fusion working directory
 .fusion/
 __pycache__/
+
+rust/target/
+
+.claude/settings.json
+.claude/settings.local.json

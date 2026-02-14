@@ -125,7 +125,7 @@ def _setup_fusion_dir(task_plan_content: str) -> tuple:
         "goal": "集成测试目标",
         "current_phase": "EXECUTE",
         "_runtime": {
-            "version": "2.1.0",
+            "version": "2.6.3",
             "last_event_counter": 0,
         },
     }

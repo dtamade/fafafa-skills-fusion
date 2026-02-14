@@ -5,6 +5,54 @@ All notable changes to Fusion Skill will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 
+
+## [v2.6.3] - 2026-02-10
+
+> Rust Bridge MVP landed: parity-first binary path for bootstrap/runtime/hooks.
+
+### Added
+
+- **Rust workspace (MVP)** under `rust/`
+  - `fusion-cli` (`fusion-bridge` binary)
+  - `fusion-provider` (wrapper resolution, backend execution, fallback helpers)
+  - `fusion-runtime-io` (`.fusion` JSON/YAML I/O + dependency report schema)
+- **`fusion-bridge init/start`** commands (MVP bootstrap path)
+  - `init` initializes `.fusion/` from templates
+  - `start` writes goal/workflow/session phase and enters `INITIALIZE`
+- **`fusion-bridge status`** command (parity-oriented)
+  - Runtime summary
+  - Safe backlog latest injection summary
+  - Dependency report summary
+- **`fusion-bridge hook pretool/posttool/stop-guard`** commands (Rust native hook path)
+  - pretool: context injection
+  - posttool: progress delta + safe backlog + supervisor advisory
+  - stop-guard: block/allow JSON + phase correction
+- **`fusion-bridge codeagent`** command (parity-oriented)
+  - `codeagent-wrapper` auto-discovery
+  - primary backend failover to fallback backend
+  - session id extraction and write-back to `sessions.json`
+  - missing dependency report generation (`.fusion/dependency_report.json`)
+- **Rust integration tests**
+  - missing wrapper -> dependency report
+  - backend fallback -> `claude_session` update
+  - status output -> dependency report section
+  - hook no-progress path -> safe backlog injection
+  - hook stop-guard -> block decision JSON
+
+### Changed
+
+- Docs index now links Rust bridge usage:
+  - `rust/README.md`
+  - `docs/RUST_FUSION_BRIDGE_ROADMAP.md`
+- `.gitignore` now excludes `rust/target/`
+- Hook shell scripts now support `runtime.engine: rust` with automatic Python/Shell fallback
+
+### Verification
+
+- Rust tests: `cd rust && cargo test` -> passed
+- Existing runtime tests: `pytest -q` -> `317 passed`
+
+
 ## [v2.6.2] - 2026-02-10
 
 > Strict batch barrier + fail-fast scheduling for safe parallel orchestration.

@@ -1,49 +1,46 @@
 ---
 name: fusion
-version: "2.6.2"
+version: "2.6.3"
 description: |
   自主工作流 Skill - 给目标后自主执行，只在必要时打扰用户。
-  融合 Codex 执行、TDD 流程、Git 集成、3-Strike 降级策略。
-  v2: Attention 注入 + 进度监控 + 会话恢复 + LoopGuardian 防死循环。
+  融合 Codex 规划/审查、Claude 执行、TDD、Git 与 3-Strike 降级策略。
 user-invocable: true
-allowed-tools:
-  - Read
-  - Write
-  - Edit
-  - Bash
-  - Glob
-  - Grep
-  - WebFetch
-  - WebSearch
-  - Task
-  - TaskOutput
-  - AskUserQuestion
-  - mcp__ace-tool__search_context
-  - mcp__ace-tool__enhance_prompt
 hooks:
   PreToolUse:
     - matcher: "Write|Edit|Bash|Read|Glob|Grep"
       hooks:
-        # Attention injection: keeps goal/task/progress in Claude's context window
         - type: command
-          command: "bash ${CLAUDE_PLUGIN_ROOT}/scripts/fusion-pretool.sh"
+          command: |
+            if [ -f "${CLAUDE_PLUGIN_ROOT}/scripts/fusion-pretool.sh" ]; then
+              bash "${CLAUDE_PLUGIN_ROOT}/scripts/fusion-pretool.sh"
+            elif [ -f "scripts/fusion-pretool.sh" ]; then
+              bash "scripts/fusion-pretool.sh"
+            fi
   PostToolUse:
     - matcher: "Write|Edit"
       hooks:
-        # Progress monitor: detects task status changes and provides guidance
         - type: command
-          command: "bash ${CLAUDE_PLUGIN_ROOT}/scripts/fusion-posttool.sh"
+          command: |
+            if [ -f "${CLAUDE_PLUGIN_ROOT}/scripts/fusion-posttool.sh" ]; then
+              bash "${CLAUDE_PLUGIN_ROOT}/scripts/fusion-posttool.sh"
+            elif [ -f "scripts/fusion-posttool.sh" ]; then
+              bash "scripts/fusion-posttool.sh"
+            fi
   Stop:
     - hooks:
-        # Loop engine with LoopGuardian anti-deadloop protection
         - type: command
-          command: "bash ${CLAUDE_PLUGIN_ROOT}/scripts/fusion-stop-guard.sh"
+          command: |
+            MODE="${FUSION_STOP_HOOK_MODE:-legacy}"
+            if [ -f "${CLAUDE_PLUGIN_ROOT}/scripts/fusion-stop-guard.sh" ]; then
+              FUSION_STOP_HOOK_MODE="$MODE" bash "${CLAUDE_PLUGIN_ROOT}/scripts/fusion-stop-guard.sh"
+            elif [ -f "scripts/fusion-stop-guard.sh" ]; then
+              FUSION_STOP_HOOK_MODE="$MODE" bash "scripts/fusion-stop-guard.sh"
+            fi
 ---
 
 # Fusion - 自主工作流
 
-> Note: `allowed-tools` / `hooks` in frontmatter are project metadata for portability.
-> Actual hook wiring depends on host configuration; see `docs/HOOKS_SETUP.md`.
+> Hook 配置请使用宿主标准设置文件（如 `.claude/settings.json`），见 `docs/HOOKS_SETUP.md`。
 
 
 ## ⚠️ 执行循环协议 (CRITICAL)
@@ -96,7 +93,8 @@ def check_and_continue():
 **"给目标，自动执行，只在必要时打扰"**
 
 融合多个优秀方案的精华：
-- **Codex** - 深度代码分析和任务执行
+- **Codex** - 规划、复杂分析与审查
+- **Claude** - 执行实现与本地改写
 - **TDD** - 强制测试驱动开发
 - **Git** - 自动分支和提交管理
 - **3-Strike** - 智能错误恢复和降级
@@ -127,7 +125,7 @@ def check_and_continue():
 ```
 
 启动自主工作流。Fusion 会：
-- 调用 Codex 分析代码库并拆分任务
+- 按阶段与任务类型路由 Codex/Claude（默认：Codex 规划审查，Claude 执行写码）
 - 按依赖关系调度执行
 - 持续写入进度到 `.fusion/progress.md`
 - 只在阻塞时询问用户
@@ -141,11 +139,12 @@ def check_and_continue():
 | `/fusion pause` | 暂停当前执行 |
 | `/fusion cancel` | 取消当前任务 |
 | `/fusion logs` | 查看详细执行日志 |
+| `/fusion achievements` | 查看成就汇总与排行榜 |
 
 ### 选项
 
 ```bash
---backend codex|claude   # 指定后端 (默认: codex)
+--backend codex|claude   # 强制指定后端 (默认: auto 路由)
 --parallel N             # 最大并行任务数 (默认: 2)
 --dry-run                # 只生成计划不执行
 --no-tdd                 # 跳过 TDD 流程
@@ -166,8 +165,8 @@ def check_and_continue():
 │  0. UNDERSTAND  - 理解目标，评估清晰度，必要时追问 (新)     │
 │  1. INITIALIZE  - 初始化 .fusion 目录和文件                 │
 │  2. ANALYZE     - 分析目标，理解代码库上下文                │
-│  3. DECOMPOSE   - Codex 拆分为可执行的原子任务              │
-│  4. EXECUTE     - 对每个任务执行 TDD 循环:                  │
+│  3. DECOMPOSE   - Codex 拆分原子任务（可降级 Claude）       │
+│  4. EXECUTE     - 默认 Claude 执行，按任务类型路由:          │
 │                   RED → GREEN → REFACTOR                     │
 │  5. VERIFY      - 运行完整测试套件                          │
 │  6. REVIEW      - 代码质量自审查                            │
@@ -250,14 +249,14 @@ understand:
 │                  3-Strike 错误协议                         │
 ├───────────────────────────────────────────────────────────┤
 │                                                           │
-│  Strike 1: Codex 针对性修复                               │
+│  Strike 1: 当前后端针对性修复                              │
 │  └─ 分析错误原因，应用修复，重试                          │
 │                                                           │
-│  Strike 2: Codex 换实现方案                               │
+│  Strike 2: 当前后端换实现方案                              │
 │  └─ 不重复已失败的路径，尝试替代方案                      │
 │                                                           │
-│  Strike 3: 降级到 Claude 本地                             │
-│  └─ 使用 Claude 直接执行，跳过 Codex                      │
+│  Strike 3: 切换到备用后端                                  │
+│  └─ 避免重复失败路径，继续推进                              │
 │                                                           │
 │  3 Strikes 后: 升级给用户                                 │
 │  └─ 详细说明尝试过什么，请求指导                          │
@@ -265,12 +264,22 @@ understand:
 └───────────────────────────────────────────────────────────┘
 ## 后端路由（摘要）
 
-| 任务类型 | 首选后端 | 说明 |
-|----------|----------|------|
-| 任务分解 / 复杂分析 / 重构 | Codex | 需要深度代码和依赖理解 |
-| 文档 / 简单编辑 / 配置小改 | Claude | 低复杂度、快速响应 |
+### Phase 默认路由
 
-详细路由与降级策略请看 `EXECUTION_PROTOCOL.md`。
+| 阶段 | 默认后端 |
+|------|----------|
+| UNDERSTAND / INITIALIZE / ANALYZE / DECOMPOSE / VERIFY / REVIEW | Codex |
+| EXECUTE / COMMIT / DELIVER | Claude |
+
+### Task Type 默认路由（EXECUTE 阶段）
+
+| 任务类型 | 默认后端 | 说明 |
+|----------|----------|------|
+| implementation / verification | Claude | 执行编码与测试修复 |
+| design / research | Codex | 深度分析、方案推导 |
+| documentation / configuration | Claude | 低风险快速落地 |
+
+详细路由与降级策略请看 `EXECUTION_PROTOCOL.md` 与 `templates/config.yaml`。
 
 ---
 
@@ -284,6 +293,7 @@ understand:
 ├── sessions.json
 ├── config.yaml
 ├── events.jsonl
+├── backend_failure_report.json  # 后端阻塞（primary+fallback 失败）时生成
 └── dependency_report.json   # 依赖阻塞时生成
 ```
 
@@ -311,6 +321,8 @@ Fusion 会先自动处理关键依赖，再决定是否阻塞：
 - 仍无法处理时：
   - 写入 `.fusion/dependency_report.json`
   - 在 `/fusion status` 的 `Dependency Report` 展示修复建议
+- 当后端执行阻塞（primary+fallback 都失败）时，会写入 `.fusion/backend_failure_report.json` 并在 `/fusion status` 的 `Backend Failure Report` 展示摘要
+- 如果某个后端出现 hang/无响应，可设置 `FUSION_CODEAGENT_TIMEOUT_SEC=<seconds>` 让 `fusion-codeagent.sh` 超时后自动触发 fallback
 
 ---
 
@@ -319,6 +331,17 @@ Fusion 会先自动处理关键依赖，再决定是否阻塞：
 ```yaml
 runtime:
   enabled: true
+
+backends:
+  primary: codex
+  fallback: claude
+
+backend_routing:
+  phase_routing:
+    EXECUTE: claude
+  task_type_routing:
+    implementation: claude
+    design: codex
 
 understand:
   pass_threshold: 7
@@ -350,4 +373,3 @@ supervisor:
 - Hook 挂载说明：`docs/HOOKS_SETUP.md`
 - 提示词模板：`prompts/*.md`
 - 运行脚本：`scripts/*.sh`
-

@@ -8,7 +8,30 @@ Fusion Runtime 配置加载
 from __future__ import annotations
 
 from pathlib import Path
+import re
 from typing import Any, Dict
+
+
+DEFAULT_BACKEND_PHASE_ROUTING: Dict[str, str] = {
+    "UNDERSTAND": "codex",
+    "INITIALIZE": "codex",
+    "ANALYZE": "codex",
+    "DECOMPOSE": "codex",
+    "EXECUTE": "claude",
+    "VERIFY": "codex",
+    "REVIEW": "codex",
+    "COMMIT": "claude",
+    "DELIVER": "claude",
+}
+
+DEFAULT_BACKEND_TASK_TYPE_ROUTING: Dict[str, str] = {
+    "implementation": "claude",
+    "verification": "claude",
+    "design": "codex",
+    "research": "codex",
+    "documentation": "claude",
+    "configuration": "claude",
+}
 
 
 def _to_bool(value: Any, default: bool) -> bool:
@@ -39,40 +62,107 @@ def _to_float(value: Any, default: float) -> float:
         return default
 
 
+def _normalize_backend(value: Any, default: str) -> str:
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in ("codex", "claude"):
+            return normalized
+    return default
+
+
+def _merge_backend_map(
+    defaults: Dict[str, str],
+    raw_map: Any,
+    *,
+    uppercase_keys: bool,
+) -> Dict[str, str]:
+    merged = dict(defaults)
+    if not isinstance(raw_map, dict):
+        return merged
+
+    for key, value in raw_map.items():
+        if not isinstance(key, str):
+            continue
+        backend = _normalize_backend(value, "")
+        if not backend:
+            continue
+        normalized_key = key.strip().upper() if uppercase_keys else key.strip().lower()
+        if normalized_key:
+            merged[normalized_key] = backend
+
+    return merged
+
+
+def _parse_scalar(value: str) -> Any:
+    v = value.strip()
+    if not v:
+        return ""
+
+    if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+        return v[1:-1]
+
+    lowered = v.lower()
+    if lowered in ("true", "false"):
+        return lowered == "true"
+    if lowered in ("null", "none"):
+        return None
+
+    if re.fullmatch(r"[-+]?\d+", v):
+        try:
+            return int(v)
+        except ValueError:
+            return v
+
+    if re.fullmatch(r"[-+]?\d+\.\d+", v):
+        try:
+            return float(v)
+        except ValueError:
+            return v
+
+    return v
+
+
 def _minimal_parse_yaml(path: Path) -> Dict[str, Any]:
     """
-    极简 YAML 解析（仅支持 section + 一级 key:value）。
+    极简 YAML 解析（支持按缩进构建嵌套 dict，覆盖常见配置结构）。
 
     目标是故障安全，不追求完整 YAML 语义。
     """
-    data: Dict[str, Dict[str, Any]] = {}
-    current_section = ""
-
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except IOError:
         return {}
 
+    root: Dict[str, Any] = {}
+    stack: list[tuple[int, Dict[str, Any]]] = [(-1, root)]
+
     for raw_line in lines:
         line = raw_line.split("#", 1)[0].rstrip()
-        if not line.strip():
+        if not line.strip() or ":" not in line:
             continue
 
-        if not line.startswith((" ", "\t")) and line.endswith(":"):
-            current_section = line[:-1].strip()
-            if current_section:
-                data.setdefault(current_section, {})
+        indent = len(line) - len(line.lstrip(" \t"))
+        stripped = line.lstrip(" \t")
+
+        while len(stack) > 1 and indent <= stack[-1][0]:
+            stack.pop()
+
+        parent = stack[-1][1]
+        key, value = stripped.split(":", 1)
+        key = key.strip()
+        value = value.strip()
+
+        if not key:
             continue
 
-        if current_section and ":" in line and line.startswith((" ", "\t")):
-            key, value = line.split(":", 1)
-            key = key.strip()
-            value = value.strip()
-            if value.startswith(("'", '"')) and value.endswith(("'", '"')) and len(value) >= 2:
-                value = value[1:-1]
-            data[current_section][key] = value
+        if value == "":
+            next_map: Dict[str, Any] = {}
+            parent[key] = next_map
+            stack.append((indent, next_map))
+        else:
+            parent[key] = _parse_scalar(value)
 
-    return data
+    return root
 
 
 def load_raw_config(fusion_dir: str = ".fusion") -> Dict[str, Any]:
@@ -100,6 +190,7 @@ def load_fusion_config(fusion_dir: str = ".fusion") -> Dict[str, Any]:
 
     runtime = raw.get("runtime") if isinstance(raw.get("runtime"), dict) else {}
     backends = raw.get("backends") if isinstance(raw.get("backends"), dict) else {}
+    backend_routing = raw.get("backend_routing") if isinstance(raw.get("backend_routing"), dict) else {}
     execution = raw.get("execution") if isinstance(raw.get("execution"), dict) else {}
     scheduler = raw.get("scheduler") if isinstance(raw.get("scheduler"), dict) else {}
     budget = raw.get("budget") if isinstance(raw.get("budget"), dict) else {}
@@ -116,7 +207,7 @@ def load_fusion_config(fusion_dir: str = ".fusion") -> Dict[str, Any]:
     if isinstance(safe_backlog_allowed_categories, list):
         safe_backlog_allowed_categories = ",".join(str(item) for item in safe_backlog_allowed_categories)
     elif safe_backlog_allowed_categories is None:
-        safe_backlog_allowed_categories = "documentation,quality"
+        safe_backlog_allowed_categories = "quality,documentation,optimization"
     else:
         safe_backlog_allowed_categories = str(safe_backlog_allowed_categories)
 
@@ -130,12 +221,48 @@ def load_fusion_config(fusion_dir: str = ".fusion") -> Dict[str, Any]:
     if understand_max_questions < 1:
         understand_max_questions = 1
 
+    backend_primary = _normalize_backend(backends.get("primary"), "codex")
+    backend_fallback = _normalize_backend(backends.get("fallback"), "claude")
+    if backend_fallback == backend_primary:
+        backend_fallback = "claude" if backend_primary == "codex" else "codex"
+
+    phase_routing_raw = None
+    task_type_routing_raw = None
+
+    if isinstance(backends.get("phase_routing"), dict):
+        phase_routing_raw = backends.get("phase_routing")
+    elif isinstance(backend_routing.get("phase_routing"), dict):
+        phase_routing_raw = backend_routing.get("phase_routing")
+    elif isinstance(backend_routing.get("phase"), dict):
+        phase_routing_raw = backend_routing.get("phase")
+
+    if isinstance(backends.get("task_type_routing"), dict):
+        task_type_routing_raw = backends.get("task_type_routing")
+    elif isinstance(backend_routing.get("task_type_routing"), dict):
+        task_type_routing_raw = backend_routing.get("task_type_routing")
+    elif isinstance(backend_routing.get("task_type"), dict):
+        task_type_routing_raw = backend_routing.get("task_type")
+
+    backend_phase_routing = _merge_backend_map(
+        DEFAULT_BACKEND_PHASE_ROUTING,
+        phase_routing_raw,
+        uppercase_keys=True,
+    )
+    backend_task_type_routing = _merge_backend_map(
+        DEFAULT_BACKEND_TASK_TYPE_ROUTING,
+        task_type_routing_raw,
+        uppercase_keys=False,
+    )
+
     return {
         "runtime_enabled": _to_bool(runtime.get("enabled"), False),
-        "runtime_version": str(runtime.get("version") or "2.1.0"),
+        "runtime_version": str(runtime.get("version") or "2.6.3"),
         "runtime_compat_mode": _to_bool(runtime.get("compat_mode"), True),
-        "backend_primary": str(backends.get("primary") or "codex"),
-        "backend_fallback": str(backends.get("fallback") or "claude"),
+        "runtime_engine": str(runtime.get("engine") or "python"),
+        "backend_primary": backend_primary,
+        "backend_fallback": backend_fallback,
+        "backend_phase_routing": backend_phase_routing,
+        "backend_task_type_routing": backend_task_type_routing,
         "execution_parallel": execution_parallel,
         "execution_timeout_ms": _to_int(execution.get("timeout"), 7_200_000),
         "scheduler_enabled": _to_bool(scheduler.get("enabled"), False),
@@ -145,7 +272,7 @@ def load_fusion_config(fusion_dir: str = ".fusion") -> Dict[str, Any]:
         "budget_global_latency_limit_ms": _to_int(budget.get("global_latency_limit_ms"), 7_200_000),
         "budget_warning_threshold": _to_float(budget.get("warning_threshold"), 0.8),
         "budget_hard_limit_action": str(budget.get("hard_limit_action") or "serial"),
-        "safe_backlog_enabled": _to_bool(safe_backlog.get("enabled"), False),
+        "safe_backlog_enabled": _to_bool(safe_backlog.get("enabled"), True),
         "safe_backlog_trigger_no_progress_rounds": _to_int(safe_backlog.get("trigger_no_progress_rounds"), 3),
         "safe_backlog_max_tasks_per_run": safe_backlog_max_tasks_per_run,
         "safe_backlog_allowed_categories": safe_backlog_allowed_categories,

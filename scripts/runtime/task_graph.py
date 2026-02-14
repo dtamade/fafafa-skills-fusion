@@ -29,7 +29,7 @@ class TaskNode:
     name: str
     status: str = "PENDING"   # PENDING / IN_PROGRESS / COMPLETED / FAILED
     task_type: str = "implementation"
-    backend: str = "codex"
+    backend: str = ""
     dependencies: List[str] = field(default_factory=list)
     writeset: List[str] = field(default_factory=list)
     cost_budget: int = 0       # token 预算

@@ -1,0 +1,26 @@
+[package]
+name = "fusion-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "fusion-bridge"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+clap.workspace = true
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha1.workspace = true
+fusion-provider = { path = "../fusion-provider" }
+fusion-runtime-io = { path = "../fusion-runtime-io" }
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.1"
+tempfile.workspace = true

@@ -7,6 +7,15 @@ FUSION_DIR=".fusion"
 ACTION="${1:-status}"
 BRANCH_PREFIX="fusion/"
 
+usage() {
+    echo "Usage: fusion-git.sh {status|create-branch|commit|branch|changes|diff|cleanup}"
+}
+
+if [ "$ACTION" = "-h" ] || [ "$ACTION" = "--help" ]; then
+    usage
+    exit 0
+fi
+
 # Colors for output (use printf for better portability)
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -22,7 +31,7 @@ log_warn() {
 }
 
 log_error() {
-    printf "${RED}[fusion-git]${NC} %s\n" "$1"
+    printf "${RED}[fusion-git]${NC} %s\n" "$1" >&2
 }
 
 # Check if we're in a git repo
@@ -162,11 +171,17 @@ case "$ACTION" in
         cleanup "$ORIGINAL_BRANCH"
         ;;
 
-    status|*)
+    status)
         check_git_repo
         echo "=== Fusion Git Status ==="
         echo "Current branch: $(get_current_branch)"
         echo ""
         get_changes_summary
+        ;;
+
+    *)
+        log_error "Unknown action: $ACTION"
+        usage >&2
+        exit 1
         ;;
 esac

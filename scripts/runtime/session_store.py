@@ -16,6 +16,9 @@ from dataclasses import dataclass, field
 from .state_machine import State, Event, phase_to_state, state_to_phase
 
 
+RUNTIME_VERSION = "2.6.3"
+
+
 @dataclass
 class StoredEvent:
     """持久化的事件记录"""
@@ -269,7 +272,7 @@ class SessionStore:
         # 更新 runtime 扩展
         last_event = self.get_last_event()
         data["_runtime"] = {
-            "version": "2.1.0",
+            "version": RUNTIME_VERSION,
             "state": state.name,
             "last_event_id": last_event.id if last_event else None,
             "last_event_counter": self._event_counter,

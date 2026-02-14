@@ -61,10 +61,19 @@ def _write_all_done_task_plan(fusion_dir: Path):
     )
 
 
+EARLY_WORKFLOW_EVENTS = [
+    Event.START,
+    Event.UNDERSTAND_DONE,
+    Event.INIT_DONE,
+    Event.ANALYZE_DONE,
+    Event.DECOMPOSE_DONE,
+]
+
+
 def _advance_kernel_to_execute(fusion_dir: Path) -> 'FusionKernel':
     """创建 Kernel 并推进到 EXECUTE 状态"""
     k = FusionKernel(fusion_dir=str(fusion_dir))
-    for evt in [Event.START, Event.INIT_DONE, Event.ANALYZE_DONE, Event.DECOMPOSE_DONE]:
+    for evt in EARLY_WORKFLOW_EVENTS:
         r = k.dispatch(evt)
         assert r.success, f"Advance failed at {evt}: {r.error}"
     assert k.current_state == State.EXECUTE
@@ -87,15 +96,12 @@ def _advance_kernel_to_verify(fusion_dir: Path) -> 'FusionKernel':
 # ──────────────────────────────────────────────
 
 def scenario_fsm_basic_transitions() -> ScenarioResult:
-    """S01: Kernel 基本状态转移链 (IDLE→INIT→ANALYZE→DECOMPOSE→EXECUTE→VERIFY→REVIEW→COMMIT→DELIVER→COMPLETED)"""
+    """S01: Kernel 基本状态转移链 (IDLE→UNDERSTAND→INITIALIZE→ANALYZE→DECOMPOSE→EXECUTE→VERIFY→REVIEW→COMMIT→DELIVER→COMPLETED)"""
     t0 = time.monotonic()
     fusion_dir = _make_fusion_dir()
     try:
         k = FusionKernel(fusion_dir=str(fusion_dir))
-        transitions = [
-            Event.START, Event.INIT_DONE, Event.ANALYZE_DONE,
-            Event.DECOMPOSE_DONE,
-        ]
+        transitions = EARLY_WORKFLOW_EVENTS
         for evt in transitions:
             result = k.dispatch(evt)
             assert result.success, f"Failed at {evt}: {result.error}"
@@ -121,11 +127,7 @@ def scenario_fsm_error_recovery() -> ScenarioResult:
     t0 = time.monotonic()
     fusion_dir = _make_fusion_dir()
     try:
-        k = FusionKernel(fusion_dir=str(fusion_dir))
-        k.dispatch(Event.START)
-        k.dispatch(Event.INIT_DONE)
-        k.dispatch(Event.ANALYZE_DONE)
-        k.dispatch(Event.DECOMPOSE_DONE)
+        k = _advance_kernel_to_execute(fusion_dir)
         assert k.current_state == State.EXECUTE
 
         r = k.dispatch(Event.ERROR_OCCURRED, {"error": "test"})
@@ -147,11 +149,7 @@ def scenario_fsm_pause_resume() -> ScenarioResult:
     t0 = time.monotonic()
     fusion_dir = _make_fusion_dir()
     try:
-        k = FusionKernel(fusion_dir=str(fusion_dir))
-        k.dispatch(Event.START)
-        k.dispatch(Event.INIT_DONE)
-        k.dispatch(Event.ANALYZE_DONE)
-        k.dispatch(Event.DECOMPOSE_DONE)
+        k = _advance_kernel_to_execute(fusion_dir)
 
         r = k.dispatch(Event.PAUSE)
         assert r.success
@@ -172,9 +170,7 @@ def scenario_fsm_cancel() -> ScenarioResult:
     t0 = time.monotonic()
     fusion_dir = _make_fusion_dir()
     try:
-        k = FusionKernel(fusion_dir=str(fusion_dir))
-        k.dispatch(Event.START)
-        k.dispatch(Event.INIT_DONE)
+        k = _advance_kernel_to_execute(fusion_dir)
         r = k.dispatch(Event.CANCEL)
         assert r.success
         assert k.current_state == State.CANCELLED
@@ -275,11 +271,11 @@ def scenario_kernel_dispatch_and_persist() -> ScenarioResult:
         k = FusionKernel(fusion_dir=str(fusion_dir))
         r = k.dispatch(Event.START)
         assert r.success
-        assert k.current_state == State.INITIALIZE
+        assert k.current_state == State.UNDERSTAND
 
         # 验证 sessions.json 已更新
         sessions = json.loads((fusion_dir / "sessions.json").read_text())
-        assert sessions.get("_runtime", {}).get("state") == "INITIALIZE"
+        assert sessions.get("_runtime", {}).get("state") == "UNDERSTAND"
 
         # 验证 events.jsonl 有事件
         events_file = fusion_dir / "events.jsonl"
@@ -322,6 +318,7 @@ def scenario_kernel_load_state() -> ScenarioResult:
     try:
         k1 = FusionKernel(fusion_dir=str(fusion_dir))
         k1.dispatch(Event.START)
+        k1.dispatch(Event.UNDERSTAND_DONE)
         k1.dispatch(Event.INIT_DONE)
         k1.dispatch(Event.ANALYZE_DONE)
         expected = k1.current_state  # 应该是 DECOMPOSE
@@ -344,6 +341,7 @@ def scenario_kernel_event_replay() -> ScenarioResult:
     try:
         k1 = FusionKernel(fusion_dir=str(fusion_dir))
         k1.dispatch(Event.START)
+        k1.dispatch(Event.UNDERSTAND_DONE)
         k1.dispatch(Event.INIT_DONE)
         k1.dispatch(Event.ANALYZE_DONE)
         k1.dispatch(Event.DECOMPOSE_DONE)
@@ -374,7 +372,7 @@ def scenario_kernel_idempotent_dispatch() -> ScenarioResult:
 
         r2 = k.dispatch(Event.START, idempotency_key="start-001")
         # 幂等重复应跳过
-        assert not r2.success or k.current_state == State.INITIALIZE
+        assert not r2.success or k.current_state == State.UNDERSTAND
         return ScenarioResult("S13-idempotent", True, (time.monotonic() - t0) * 1000)
     except Exception as e:
         return ScenarioResult("S13-idempotent", False, (time.monotonic() - t0) * 1000, str(e))
@@ -683,6 +681,7 @@ def scenario_kernel_pause_crash_resume() -> ScenarioResult:
     try:
         k1 = FusionKernel(fusion_dir=str(fusion_dir))
         k1.dispatch(Event.START)
+        k1.dispatch(Event.UNDERSTAND_DONE)
         k1.dispatch(Event.INIT_DONE)
         k1.dispatch(Event.ANALYZE_DONE)
         k1.dispatch(Event.DECOMPOSE_DONE)
@@ -710,6 +709,7 @@ def scenario_kernel_snapshot_corruption_replay() -> ScenarioResult:
     try:
         k1 = FusionKernel(fusion_dir=str(fusion_dir))
         k1.dispatch(Event.START)
+        k1.dispatch(Event.UNDERSTAND_DONE)
         k1.dispatch(Event.INIT_DONE)
         k1.dispatch(Event.ANALYZE_DONE)
         expected = k1.current_state  # DECOMPOSE
@@ -737,6 +737,7 @@ def scenario_kernel_listener_integration() -> ScenarioResult:
         k.on("state_changed", lambda data: events_received.append(data))
 
         k.dispatch(Event.START)
+        k.dispatch(Event.UNDERSTAND_DONE)
         k.dispatch(Event.INIT_DONE)
 
         assert len(events_received) >= 2
@@ -828,7 +829,7 @@ def scenario_full_interrupt_every_step() -> ScenarioResult:
     fusion_dir = _make_fusion_dir()
     try:
         # 阶段1: IDLE → EXECUTE（每步新建 kernel 模拟中断）
-        early_events = [Event.START, Event.INIT_DONE, Event.ANALYZE_DONE, Event.DECOMPOSE_DONE]
+        early_events = EARLY_WORKFLOW_EVENTS
         for i, evt in enumerate(early_events):
             k = FusionKernel(fusion_dir=str(fusion_dir))
             k.load_state()
@@ -865,7 +866,7 @@ def scenario_resume_reliability_single() -> ScenarioResult:
     fusion_dir = _make_fusion_dir()
     try:
         import random
-        early_events = [Event.START, Event.INIT_DONE, Event.ANALYZE_DONE, Event.DECOMPOSE_DONE]
+        early_events = EARLY_WORKFLOW_EVENTS
         late_events = [Event.ALL_TASKS_DONE, Event.VERIFY_PASS, Event.REVIEW_PASS,
                        Event.COMMIT_DONE, Event.DELIVER_DONE]
         all_events = early_events + late_events
@@ -1134,7 +1135,7 @@ def scenario_router_type_based() -> ScenarioResult:
         router = Router()
         impl_task = TaskNode(task_id="1", name="A", task_type="implementation")
         doc_task = TaskNode(task_id="2", name="B", task_type="documentation")
-        assert router.route(impl_task).backend == "codex"
+        assert router.route(impl_task).backend == "claude"
         assert router.route(doc_task).backend == "claude"
         return ScenarioResult("P11-router-type", True, (time.monotonic() - t0) * 1000)
     except Exception as e:
@@ -1471,57 +1472,165 @@ PHASE2_SCENARIOS = [
     scenario_dag_parse_brackets_in_name,
 ]
 
+CONTRACT_SCENARIOS = [
+    scenario_compat_stop_guard_allow,
+    scenario_compat_stop_guard_block,
+    scenario_compat_phase_correction,
+    scenario_compat_pretool_active,
+    scenario_compat_posttool_change,
+    scenario_compat_cli_stop_guard,
+    scenario_compat_cli_pretool,
+    scenario_compat_verify_fallback,
+]
+
 ALL_SCENARIOS = PHASE1_SCENARIOS + PHASE2_SCENARIOS
 
 
-def run_suite(scenarios, label="phase1"):
+def run_suite(scenarios, label="phase1", verbose=True):
     """运行场景列表并输出报告"""
     results = []
     for fn in scenarios:
         r = fn()
         results.append(r)
-        status = "✅" if r.passed else "❌"
-        print(f"  {status} {r.name} ({r.duration_ms:.1f}ms){'' if r.passed else ' - ' + r.error}")
+        if verbose:
+            status = "✅" if r.passed else "❌"
+            print(f"  {status} {r.name} ({r.duration_ms:.1f}ms){'' if r.passed else ' - ' + r.error}")
 
     passed = sum(1 for r in results if r.passed)
     total = len(results)
     rate = passed / total if total > 0 else 0
     total_ms = sum(r.duration_ms for r in results)
 
-    print(f"\n{'='*60}")
-    print(f"Suite: {label}")
-    print(f"Passed: {passed}/{total} ({rate*100:.1f}%)")
-    print(f"Total time: {total_ms:.1f}ms")
-    print(f"{'='*60}")
+    if verbose:
+        print(f"\n{'='*60}")
+        print(f"Suite: {label}")
+        print(f"Passed: {passed}/{total} ({rate*100:.1f}%)")
+        print(f"Total time: {total_ms:.1f}ms")
+        print(f"{'='*60}")
 
-    return results, rate
+    return results, rate, total_ms
 
 
 def main():
     parser = argparse.ArgumentParser(description="Fusion v2.5.0 回归测试运行器")
-    parser.add_argument("--suite", default="all", help="测试套件 (phase1|phase2|all)")
+    parser.add_argument("--suite", default="all", help="测试套件 (phase1|phase2|contract|all)")
     parser.add_argument("--scenario", help="专项场景 (resume_reliability)")
     parser.add_argument("--runs", type=int, default=20, help="重复次数 (用于可靠性测试)")
     parser.add_argument("--min-pass-rate", type=float, default=0.99, help="最低通过率")
+    parser.add_argument("--list-suites", action="store_true", help="列出可用 suite 并退出")
+    parser.add_argument("--json", action="store_true", help="机器可读输出（用于元数据命令）")
     args = parser.parse_args()
 
+    if args.list_suites:
+        suites = ["phase1", "phase2", "contract", "all"]
+        if args.json:
+            print(json.dumps({"result": "ok", "default_suite": "all", "suites": suites}, ensure_ascii=False))
+        else:
+            for suite in suites:
+                print(suite)
+        sys.exit(0)
+
     if args.scenario == "resume_reliability":
-        print(f"🔄 Resume Reliability Test ({args.runs} runs)")
-        print("-" * 60)
+        suite_label = "resume_reliability"
         scenarios = [scenario_resume_reliability_single for _ in range(args.runs)]
-        results, rate = run_suite(scenarios, label="resume_reliability")
+        if not args.json:
+            print(f"🔄 Resume Reliability Test ({args.runs} runs)")
+            print("-" * 60)
     elif args.suite == "phase1":
-        print(f"🧪 Phase 1 Regression Suite ({len(PHASE1_SCENARIOS)} scenarios)")
-        print("-" * 60)
-        results, rate = run_suite(PHASE1_SCENARIOS, label="phase1")
+        suite_label = "phase1"
+        scenarios = PHASE1_SCENARIOS
+        if not args.json:
+            print(f"🧪 Phase 1 Regression Suite ({len(PHASE1_SCENARIOS)} scenarios)")
+            print("-" * 60)
     elif args.suite == "phase2":
-        print(f"🧪 Phase 2 Regression Suite ({len(PHASE2_SCENARIOS)} scenarios)")
-        print("-" * 60)
-        results, rate = run_suite(PHASE2_SCENARIOS, label="phase2")
+        suite_label = "phase2"
+        scenarios = PHASE2_SCENARIOS
+        if not args.json:
+            print(f"🧪 Phase 2 Regression Suite ({len(PHASE2_SCENARIOS)} scenarios)")
+            print("-" * 60)
+    elif args.suite == "contract":
+        suite_label = "contract"
+        scenarios = CONTRACT_SCENARIOS
+        if not args.json:
+            print(f"🧪 Contract Regression Suite ({len(CONTRACT_SCENARIOS)} scenarios)")
+            print("-" * 60)
+    elif args.suite == "all":
+        suite_label = "all"
+        scenarios = ALL_SCENARIOS
+        if not args.json:
+            print(f"🧪 Full Regression Suite ({len(ALL_SCENARIOS)} scenarios)")
+            print("-" * 60)
     else:
-        print(f"🧪 Full Regression Suite ({len(ALL_SCENARIOS)} scenarios)")
-        print("-" * 60)
-        results, rate = run_suite(ALL_SCENARIOS, label="all")
+        print(f"❌ Unknown suite: {args.suite}")
+        print("Supported suites: phase1|phase2|contract|all")
+        sys.exit(1)
+
+    results, rate, total_ms = run_suite(scenarios, label=suite_label, verbose=not args.json)
+
+    if args.json:
+        passed = sum(1 for r in results if r.passed)
+        total = len(results)
+        scenario_results = [
+            {
+                "name": r.name,
+                "passed": r.passed,
+                "duration_ms": r.duration_ms,
+                "error": r.error,
+            }
+            for r in results
+        ]
+        failed_scenarios = [item["name"] for item in scenario_results if not item["passed"]]
+        longest_scenario = max(
+            scenario_results,
+            key=lambda item: item["duration_ms"],
+            default={"name": "", "duration_ms": 0.0},
+        )
+        fastest_scenario = min(
+            scenario_results,
+            key=lambda item: item["duration_ms"],
+            default={"name": "", "duration_ms": 0.0},
+        )
+        min_duration_ms = fastest_scenario["duration_ms"]
+        max_duration_ms = longest_scenario["duration_ms"]
+        avg_duration_ms = total_ms / total if total > 0 else 0.0
+
+        payload = {
+            "schema_version": "v1",
+            "result": "ok" if rate >= args.min_pass_rate else "fail",
+            "suite": suite_label,
+            "passed": passed,
+            "total": total,
+            "total_scenarios": total,
+            "rate_basis": total,
+            "pass_rate": rate,
+            "success_rate": (passed / total) if total > 0 else 0.0,
+            "success_count": passed,
+            "failure_count": len(failed_scenarios),
+            "min_pass_rate": args.min_pass_rate,
+            "duration_ms": total_ms,
+            "scenario_results": scenario_results,
+            "failed_scenarios": failed_scenarios,
+            "failed_rate": (len(failed_scenarios) / total) if total > 0 else 0.0,
+            "scenario_count_by_result": {
+                "passed": passed,
+                "failed": len(failed_scenarios),
+            },
+            "duration_stats": {
+                "min_duration_ms": min_duration_ms,
+                "max_duration_ms": max_duration_ms,
+                "avg_duration_ms": avg_duration_ms,
+            },
+            "longest_scenario": {
+                "name": longest_scenario["name"],
+                "duration_ms": longest_scenario["duration_ms"],
+            },
+            "fastest_scenario": {
+                "name": fastest_scenario["name"],
+                "duration_ms": fastest_scenario["duration_ms"],
+            },
+        }
+        print(json.dumps(payload, ensure_ascii=False))
+        sys.exit(0 if rate >= args.min_pass_rate else 1)
 
     if rate < args.min_pass_rate:
         print(f"\n❌ FAIL: Pass rate {rate*100:.1f}% < {args.min_pass_rate*100:.1f}%")
@@ -1529,6 +1638,7 @@ def main():
     else:
         print(f"\n✅ PASS: Pass rate {rate*100:.1f}% ≥ {args.min_pass_rate*100:.1f}%")
         sys.exit(0)
+
 
 
 if __name__ == "__main__":

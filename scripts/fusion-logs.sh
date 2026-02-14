@@ -3,7 +3,59 @@
 set -euo pipefail
 
 FUSION_DIR=".fusion"
-LINES="${1:-50}"  # Default to last 50 lines
+
+is_truthy() {
+    case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
+        1|true|yes|on)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+hook_debug_enabled() {
+    if is_truthy "${FUSION_HOOK_DEBUG:-}"; then
+        return 0
+    fi
+
+    [ -f "$FUSION_DIR/.hook_debug" ]
+}
+
+usage() {
+    echo "Usage: fusion-logs.sh [lines]"
+}
+
+if [ "$#" -gt 1 ]; then
+    echo "❌ Too many arguments" >&2
+    usage >&2
+    exit 1
+fi
+
+case "${1:-}" in
+    -h|--help)
+        usage
+        exit 0
+        ;;
+    --*)
+        echo "❌ Unknown option: $1" >&2
+        usage >&2
+        exit 1
+        ;;
+    "")
+        LINES="50"
+        ;;
+    *)
+        LINES="$1"
+        ;;
+esac
+
+if ! [[ "$LINES" =~ ^[1-9][0-9]*$ ]]; then
+    echo "❌ LINES must be a positive integer" >&2
+    usage >&2
+    exit 1
+fi
 
 if [ ! -d "$FUSION_DIR" ]; then
     echo "❌ No fusion workflow found in current directory"
@@ -32,6 +84,29 @@ if [ -f "$FUSION_DIR/sessions.json" ]; then
     fi
     echo ""
 fi
+
+# Hook debug summary
+echo "🪝 HOOK DEBUG"
+echo "───────────────────────────────────────────────────────────────"
+if hook_debug_enabled; then
+    echo "enabled: true"
+else
+    echo "enabled: false"
+fi
+
+if [ -f "$FUSION_DIR/.hook_debug" ]; then
+    echo "flag: $FUSION_DIR/.hook_debug"
+fi
+
+if [ -f "$FUSION_DIR/hook-debug.log" ]; then
+    echo "log: $FUSION_DIR/hook-debug.log"
+    echo "recent (last 5):"
+    tail -n 5 "$FUSION_DIR/hook-debug.log" 2>/dev/null | sed 's/^/  /'
+else
+    echo "log: (none)"
+fi
+
+echo ""
 
 # Task Plan Summary (safe grep count)
 if [ -f "$FUSION_DIR/task_plan.md" ]; then

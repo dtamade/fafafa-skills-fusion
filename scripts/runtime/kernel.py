@@ -25,6 +25,7 @@ from .conflict_detector import ConflictDetector
 from .budget_manager import BudgetManager, BudgetConfig
 from .router import Router
 from .config import load_fusion_config
+from .session_store import RUNTIME_VERSION
 
 
 @dataclass
@@ -462,7 +463,7 @@ class FusionKernel:
                 "failed_tasks": self._context.failed_tasks
             },
             "runtime": {
-                "version": "2.1.0",
+                "version": RUNTIME_VERSION,
                 "event_counter": self.session_store._event_counter
             }
         }

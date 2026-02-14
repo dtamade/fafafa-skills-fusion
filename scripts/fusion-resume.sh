@@ -10,6 +10,39 @@ LOCK_ACQUIRED=false
 # Get script directory (cross-platform)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+is_truthy() {
+    case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
+        1|true|yes|on)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+hook_debug_enabled() {
+    if is_truthy "${FUSION_HOOK_DEBUG:-}"; then
+        return 0
+    fi
+
+    [ -f "$FUSION_DIR/.hook_debug" ]
+}
+if [ "$#" -gt 0 ]; then
+    case "$1" in
+        -h|--help)
+            echo "Usage: fusion-resume.sh"
+            exit 0
+            ;;
+        *)
+            echo "❌ Unknown option: $1" >&2
+            echo "Usage: fusion-resume.sh" >&2
+            exit 1
+            ;;
+    esac
+fi
+
+
 # Check if lock is stale
 is_lock_stale() {
     local lock_dir="$1"
@@ -217,5 +250,12 @@ echo "  For other tasks, execute directly."
 if [ -n "$CODEX_SESSION" ]; then
     echo "  Use session ID: $CODEX_SESSION for codeagent-wrapper resume."
 fi
+
+if hook_debug_enabled; then
+    echo "  [fusion][hooks] Hook debug: ON (stderr + .fusion/hook-debug.log)"
+else
+    echo "  [fusion][hooks] Hook debug: OFF (enable: touch .fusion/.hook_debug)"
+fi
+
 echo ""
 echo "═══════════════════════════════════════════════════════════════"

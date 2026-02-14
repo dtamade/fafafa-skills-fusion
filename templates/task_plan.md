@@ -21,6 +21,7 @@
 
 ### Task 1: [task_id] [STATUS]
 - Type: design|implementation|verification|documentation|configuration|research
+- Owner: planner|coder|reviewer (optional)
 - Execution: TDD (implementation/verification) | Direct (others)
 - Backend: codex|claude
 - Dependencies: []

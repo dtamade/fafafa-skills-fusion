@@ -16,8 +16,8 @@ from .budget_manager import BudgetManager
 
 # 任务类型 → 默认后端
 DEFAULT_ROUTING: Dict[str, str] = {
-    "implementation": "codex",
-    "verification": "codex",
+    "implementation": "claude",
+    "verification": "claude",
     "design": "codex",
     "research": "codex",
     "documentation": "claude",

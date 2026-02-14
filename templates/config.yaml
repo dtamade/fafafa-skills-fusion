@@ -5,6 +5,26 @@ backends:
   primary: codex
   fallback: claude
 
+# 后端路由策略（推荐：Codex 规划/审查，Claude 执行写码）
+backend_routing:
+  phase_routing:
+    UNDERSTAND: codex
+    INITIALIZE: codex
+    ANALYZE: codex
+    DECOMPOSE: codex
+    EXECUTE: claude
+    VERIFY: codex
+    REVIEW: codex
+    COMMIT: claude
+    DELIVER: claude
+  task_type_routing:
+    implementation: claude
+    verification: claude
+    design: codex
+    research: codex
+    documentation: claude
+    configuration: claude
+
 # 执行配置
 execution:
   parallel: 2              # 最大并行任务数
@@ -21,7 +41,8 @@ parallel:
 runtime:
   enabled: true
   compat_mode: true
-  version: "2.6.2"
+  engine: "python"        # python | rust
+  version: "2.6.3"
 
 # Understand 阶段策略
 understand:

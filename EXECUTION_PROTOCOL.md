@@ -8,21 +8,21 @@
 
 ### 后端调用工具
 
-**统一使用 `codeagent-wrapper`**（支持多后端，自动降级）：
+**统一使用 `codeagent-wrapper`**（支持多后端，按 phase/task-type 路由，失败自动降级）：
 
 ```bash
-# 主调用（默认使用 Codex 后端）
-codeagent-wrapper --backend codex - "$PWD" <<'EOF'
+# 主调用（由路由决定）
+codeagent-wrapper --backend <ROUTED_BACKEND> - "$PWD" <<'EOF'
 <task content>
 EOF
 
-# 恢复会话
-codeagent-wrapper --backend codex resume <SESSION_ID> - "$PWD" <<'EOF'
+# 恢复会话（沿用当前任务路由）
+codeagent-wrapper --backend <ROUTED_BACKEND> resume <SESSION_ID> - "$PWD" <<'EOF'
 <task content>
 EOF
 
-# 降级到 Claude
-codeagent-wrapper --backend claude - "$PWD" <<'EOF'
+# 备用后端（主后端失败时）
+codeagent-wrapper --backend <FALLBACK_BACKEND> - "$PWD" <<'EOF'
 <task content>
 EOF
 ```
@@ -41,6 +41,15 @@ EOF
 | `documentation` | 直接执行 | 文档生成 |
 | `configuration` | 直接执行 | 配置修改 |
 | `research` | 直接执行 | 代码库研究 |
+
+### 默认路由（v2.6.3）
+
+| 路由维度 | 默认 `codex` | 默认 `claude` |
+|----------|---------------|----------------|
+| 阶段路由 | UNDERSTAND / INITIALIZE / ANALYZE / DECOMPOSE / VERIFY / REVIEW | EXECUTE / COMMIT / DELIVER |
+| 任务类型路由（EXECUTE） | design / research | implementation / verification / documentation / configuration |
+
+可在 `.fusion/config.yaml` 的 `backend_routing` 中覆盖。
 
 ---
 
@@ -169,7 +178,9 @@ ROLE_FILE: <prompts/decompose.md 的内容>
 
 ## Output
 生成 YAML 格式的任务列表，遵循 prompts/decompose.md 中的规范。
-每个任务必须指定 type: implementation|verification|design|documentation|configuration|research
+每个任务必须指定:
+- type: implementation|verification|design|documentation|configuration|research
+- owner: planner|coder|reviewer
 EOF
 ```
 
@@ -228,7 +239,7 @@ else:
 #### 4.2.1 直接执行流程 (design/documentation/configuration/research)
 
 ```bash
-codeagent-wrapper --backend codex resume <SESSION_ID> - "$PWD" <<'EOF'
+codeagent-wrapper --backend <ROUTED_BACKEND> resume <SESSION_ID> - "$PWD" <<'EOF'
 ## Task: <task_id>
 ## Type: <task_type>
 
@@ -249,7 +260,7 @@ EOF
 ##### TDD - RED (写失败测试)
 
 ```bash
-codeagent-wrapper --backend codex resume <SESSION_ID> - "$PWD" <<'EOF'
+codeagent-wrapper --backend <ROUTED_BACKEND> resume <SESSION_ID> - "$PWD" <<'EOF'
 ## Task: <task_id>
 ## Phase: RED (Write Failing Test)
 
@@ -269,7 +280,7 @@ EOF
 #### 4.2.2 TDD - GREEN (最小实现)
 
 ```bash
-codeagent-wrapper --backend codex resume <SESSION_ID> - "$PWD" <<'EOF'
+codeagent-wrapper --backend <ROUTED_BACKEND> resume <SESSION_ID> - "$PWD" <<'EOF'
 ## Task: <task_id>
 ## Phase: GREEN (Minimal Implementation)
 
@@ -287,7 +298,7 @@ EOF
 #### 4.2.3 TDD - REFACTOR (重构)
 
 ```bash
-codeagent-wrapper --backend codex resume <SESSION_ID> - "$PWD" <<'EOF'
+codeagent-wrapper --backend <ROUTED_BACKEND> resume <SESSION_ID> - "$PWD" <<'EOF'
 ## Task: <task_id>
 ## Phase: REFACTOR
 
@@ -310,7 +321,7 @@ EOF
 #### Strike 1: 针对性修复
 
 ```bash
-codeagent-wrapper --backend codex resume <SESSION_ID> - "$PWD" <<'EOF'
+codeagent-wrapper --backend <ROUTED_BACKEND> resume <SESSION_ID> - "$PWD" <<'EOF'
 ## Error Recovery - Strike 1
 
 上一步失败：
@@ -331,7 +342,7 @@ EOF
 #### Strike 2: 换方案
 
 ```bash
-codeagent-wrapper --backend codex resume <SESSION_ID> - "$PWD" <<'EOF'
+codeagent-wrapper --backend <ROUTED_BACKEND> resume <SESSION_ID> - "$PWD" <<'EOF'
 ## Error Recovery - Strike 2
 
 第一次修复仍然失败。
@@ -350,17 +361,17 @@ codeagent-wrapper --backend codex resume <SESSION_ID> - "$PWD" <<'EOF'
 EOF
 ```
 
-#### Strike 3: 降级到 Claude
+#### Strike 3: 切换到备用后端
 
-如果 Codex 两次失败，降级到 Claude 本地执行：
+如果当前路由后端两次失败，切换到备用后端执行：
 
 ```markdown
-[CODEX_FALLBACK] Task: <task_id>
-Reason: Codex failed twice consecutively
-Action: Executing with Claude directly
+[BACKEND_FALLBACK] Task: <task_id>
+Reason: routed backend failed twice consecutively
+Action: Switching to fallback backend
 ```
 
-然后 Claude 直接使用 Edit/Write 工具完成任务。
+然后备用后端直接使用 Edit/Write 工具完成任务。
 
 #### 3 Strikes 后: 询问用户
 
@@ -430,7 +441,7 @@ fi
 ### 6.1 代码质量自审查
 
 ```bash
-codeagent-wrapper --backend codex resume <SESSION_ID> - "$PWD" <<'EOF'
+codeagent-wrapper --backend <ROUTED_BACKEND> resume <SESSION_ID> - "$PWD" <<'EOF'
 ## Code Review
 
 审查本次工作流中所有变更的文件：
@@ -546,13 +557,13 @@ Fusion workflow completed.
 │  Task Fails                                                  │
 │      │                                                       │
 │      ▼                                                       │
-│  Strike 1: Codex 针对性修复                                  │
+│  Strike 1: 当前路由后端针对性修复                               │
 │      │                                                       │
 │      ▼ (仍失败)                                              │
-│  Strike 2: Codex 换方案                                      │
+│  Strike 2: 当前路由后端换方案                                   │
 │      │                                                       │
 │      ▼ (仍失败)                                              │
-│  Strike 3: 降级到 Claude 本地                                │
+│  Strike 3: 切换到备用后端                                      │
 │      │                                                       │
 │      ▼ (仍失败)                                              │
 │  询问用户：提供指导 / 跳过 / 取消                            │
@@ -600,7 +611,7 @@ Fusion workflow completed.
 
 1. **始终使用 HEREDOC** - 避免 shell 转义问题
 2. **前台执行** - 不使用 background 模式
-3. **保存 SESSION_ID** - 每次 Codex 调用后更新 sessions.json
+3. **保存 SESSION_ID** - 每次后端调用后更新 sessions.json
 4. **记录一切** - 所有动作写入 progress.md
 5. **3-Strike 不放弃** - 失败不是终点，是换方案的机会
 6. **最少打扰** - 只在真正阻塞时询问用户

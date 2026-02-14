@@ -22,7 +22,7 @@ class TestTaskNode(unittest.TestCase):
         node = TaskNode(task_id="1", name="测试任务")
         self.assertEqual(node.status, "PENDING")
         self.assertEqual(node.task_type, "implementation")
-        self.assertEqual(node.backend, "codex")
+        self.assertEqual(node.backend, "")
         self.assertEqual(node.dependencies, [])
         self.assertEqual(node.writeset, [])
         self.assertEqual(node.cost_budget, 0)
@@ -396,7 +396,7 @@ class TestFromTaskPlan(unittest.TestCase):
         self.assertEqual(node.cost_budget, 0)
         self.assertEqual(node.latency_budget, 0)
         self.assertEqual(node.task_type, "implementation")
-        self.assertEqual(node.backend, "codex")
+        self.assertEqual(node.backend, "")
 
     def test_parse_mixed_statuses(self):
         """多种 Status 混合：COMPLETED / IN_PROGRESS / FAILED / PENDING"""

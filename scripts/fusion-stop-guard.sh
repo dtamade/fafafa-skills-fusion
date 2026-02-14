@@ -23,6 +23,95 @@ FUSION_DIR=".fusion"
 LOCK_STALE_SECONDS=300     # Consider lock stale after 5 minutes
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+is_truthy() {
+    case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
+        1|true|yes|on)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+HOOK_DEBUG=false
+if is_truthy "${FUSION_HOOK_DEBUG:-}" || [ -f "$FUSION_DIR/.hook_debug" ]; then
+    HOOK_DEBUG=true
+fi
+
+hook_debug_log() {
+    [ "$HOOK_DEBUG" = true ] || return 0
+    local message="$1"
+    local ts
+    ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local line="[fusion][hook-debug][stop][$ts] $message"
+    echo "$line" >&2
+    if [ -d "$FUSION_DIR" ]; then
+        echo "$line" >> "$FUSION_DIR/hook-debug.log" 2>/dev/null || true
+    fi
+}
+
+resolve_fusion_bridge_bin() {
+    if [ -n "${FUSION_BRIDGE_BIN:-}" ] && [ -x "$FUSION_BRIDGE_BIN" ]; then
+        echo "$FUSION_BRIDGE_BIN"
+        return 0
+    fi
+
+    if command -v fusion-bridge >/dev/null 2>&1; then
+        command -v fusion-bridge
+        return 0
+    fi
+
+    local candidates=(
+        "$SCRIPT_DIR/../rust/target/release/fusion-bridge"
+        "$SCRIPT_DIR/../rust/target/debug/fusion-bridge"
+    )
+
+    local candidate
+    for candidate in "${candidates[@]}"; do
+        if [ -x "$candidate" ]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+runtime_engine_is_rust() {
+    [ -f "$FUSION_DIR/config.yaml" ] || return 1
+    grep -Eq 'engine:[[:space:]]*"?rust"?' "$FUSION_DIR/config.yaml" 2>/dev/null
+}
+
+runtime_enabled_in_config() {
+    [ -f "$FUSION_DIR/config.yaml" ] || return 1
+
+    awk '
+    BEGIN { in_runtime = 0; found = 0 }
+    /^[[:space:]]*#/ { next }
+    /^[^[:space:]#][^:]*:[[:space:]]*$/ {
+        key = $0
+        sub(/[[:space:]]*:[[:space:]]*$/, "", key)
+        in_runtime = (key == "runtime")
+        next
+    }
+    in_runtime && /^[[:space:]]+enabled:[[:space:]]*/ {
+        value = $0
+        sub(/^[[:space:]]+enabled:[[:space:]]*/, "", value)
+        sub(/[[:space:]]*#.*/, "", value)
+        gsub(/[[:space:]\"]/, "", value)
+        if (tolower(value) == "true") {
+            found = 1
+        }
+        exit
+    }
+    /^[^[:space:]#]/ {
+        in_runtime = 0
+    }
+    END { exit(found ? 0 : 1) }
+    ' "$FUSION_DIR/config.yaml" 2>/dev/null
+}
+
 # Use the same state lock as pause/cancel/resume for unified protection
 STATE_LOCK="${FUSION_DIR}/.state.lock"
 
@@ -31,6 +120,7 @@ LOCK_ACQUIRED=false
 
 # Read hook input from stdin (advanced stop hook API)
 HOOK_INPUT=$(cat)
+hook_debug_log "invoked: mode=${FUSION_STOP_HOOK_MODE:-auto} cwd=$(pwd)"
 
 # Source LoopGuardian for intelligent loop protection
 # IMPORTANT: Guardian requires jq. If not available, use simple block count fallback.
@@ -204,6 +294,85 @@ output_block_json() {
     fi
 }
 
+stop_hook_supports_json_block() {
+    local mode
+    mode="${FUSION_STOP_HOOK_MODE:-auto}"
+
+    case "$mode" in
+        json|modern|structured)
+            return 0
+            ;;
+        legacy|exit2)
+            return 1
+            ;;
+        auto|"")
+            # Default to structured responses for modern hook runtimes.
+            # Legacy behavior remains available via explicit FUSION_STOP_HOOK_MODE=legacy.
+            return 0
+            ;;
+        *)
+            echo "[fusion] unknown FUSION_STOP_HOOK_MODE='$mode', defaulting to structured" >&2
+            return 0
+            ;;
+    esac
+}
+
+extract_json_field() {
+    local json_payload="$1"
+    local field="$2"
+
+    if command -v python3 &>/dev/null; then
+        printf '%s' "$json_payload" | python3 -c 'import json,sys
+field=sys.argv[1]
+try:
+    payload=json.load(sys.stdin)
+except Exception:
+    raise SystemExit(0)
+value=payload.get(field, "")
+if value is None:
+    value=""
+print(value)' "$field" 2>/dev/null || true
+        return 0
+    fi
+
+    if command -v jq &>/dev/null; then
+        printf '%s' "$json_payload" | jq -r --arg field "$field" '.[$field] // empty' 2>/dev/null || true
+        return 0
+    fi
+
+    echo ""
+}
+
+emit_block_response() {
+    local reason="$1"
+    local system_msg="$2"
+
+    if stop_hook_supports_json_block; then
+        hook_debug_log "decision=block mode=structured msg=${system_msg}"
+        output_block_json "$reason" "$system_msg"
+        exit 0
+    fi
+
+    hook_debug_log "decision=block mode=legacy msg=${system_msg}"
+    echo "[fusion] stop blocked: $system_msg" >&2
+    echo "$reason" >&2
+    exit 2
+}
+
+emit_runtime_block_response() {
+    local runtime_json="$1"
+
+    local reason
+    reason=$(extract_json_field "$runtime_json" "reason")
+    local sys_msg
+    sys_msg=$(extract_json_field "$runtime_json" "systemMessage")
+
+    [ -n "$reason" ] || reason="Continue executing the Fusion workflow."
+    [ -n "$sys_msg" ] || sys_msg="🔄 Fusion | Workflow in progress"
+
+    emit_block_response "$reason" "$sys_msg"
+}
+
 # Build the prompt/reason for Claude to continue
 build_continuation_prompt() {
     local goal="$1"
@@ -241,31 +410,61 @@ EOF
 main() {
     # If no fusion directory, allow stop (not in a fusion workflow)
     if [ ! -d "$FUSION_DIR" ]; then
+        hook_debug_log "allow: .fusion missing"
         exit 0
     fi
 
     # Check sessions.json for workflow status
     if [ ! -f "$FUSION_DIR/sessions.json" ]; then
+        hook_debug_log "allow: sessions.json missing"
         exit 0
     fi
 
-    # --- Runtime v2.1 adapter ---
-    # If runtime is enabled, delegate to Python compat_v2 module.
-    # Falls back to Shell logic if Python call fails.
-    if [ -f "$FUSION_DIR/config.yaml" ] && grep -q 'enabled: *true' "$FUSION_DIR/config.yaml" 2>/dev/null; then
+    # --- Runtime adapter ---
+    # If runtime.enabled is true, prefer Rust bridge when runtime.engine=rust, else Python compat_v2.
+    # Falls back to Shell logic if runtime call fails.
+    if runtime_enabled_in_config; then
+        hook_debug_log "runtime-adapter: enabled"
         local runtime_output
-        if runtime_output=$(PYTHONPATH="$SCRIPT_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 -m runtime.compat_v2 stop-guard "$FUSION_DIR" 2>/dev/null); then
-            # Python succeeded - use its output
-            local decision
-            decision=$(echo "$runtime_output" | python3 -c "import sys,json; print(json.load(sys.stdin).get('decision','allow'))" 2>/dev/null || echo "allow")
-            if [ "$decision" = "allow" ]; then
-                exit 0
+
+        if runtime_engine_is_rust; then
+            hook_debug_log "runtime-adapter: engine=rust"
+            local bridge_bin
+            if bridge_bin="$(resolve_fusion_bridge_bin 2>/dev/null)"; then
+                if runtime_output=$("$bridge_bin" hook stop-guard --fusion-dir "$FUSION_DIR" 2>/dev/null); then
+                    local decision
+                    decision=$(extract_json_field "$runtime_output" "decision")
+                    [ -n "$decision" ] || decision="allow"
+
+                    if [ "$decision" = "allow" ]; then
+                        hook_debug_log "runtime-adapter: rust decision=allow"
+                        exit 0
+                    fi
+
+                    hook_debug_log "runtime-adapter: rust decision=block"
+                    emit_runtime_block_response "$runtime_output"
+                fi
+                hook_debug_log "runtime-adapter: rust bridge failed"
             else
-                echo "$runtime_output"
-                exit 0
+                hook_debug_log "runtime-adapter: rust bridge missing"
             fi
         fi
-        # Python failed - fall through to Shell logic
+
+        if runtime_output=$(PYTHONPATH="$SCRIPT_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 -m runtime.compat_v2 stop-guard "$FUSION_DIR" 2>/dev/null); then
+            local decision
+            decision=$(extract_json_field "$runtime_output" "decision")
+            [ -n "$decision" ] || decision="allow"
+
+            if [ "$decision" = "allow" ]; then
+                hook_debug_log "runtime-adapter: python decision=allow"
+                exit 0
+            fi
+
+            hook_debug_log "runtime-adapter: python decision=block"
+            emit_runtime_block_response "$runtime_output"
+        fi
+        hook_debug_log "runtime-adapter: failed, fallback=shell"
+        # Runtime adapter failed - fall through to Shell logic
     fi
 
     # Use unified state lock (same as pause/cancel/resume)
@@ -281,10 +480,12 @@ main() {
     if mkdir "$STATE_LOCK" 2>/dev/null; then
         LOCK_ACQUIRED=true
     else
-        # Another instance is running - but don't just allow stop!
-        # Output warning and still block to be safe
-        echo "⚠️ Another state operation in progress, blocking to be safe" >&2
-        exit 2
+        # Another instance is running; block in a mode-compatible way.
+        local lock_reason
+        lock_reason="State operation already in progress. Continue executing the Fusion workflow and retry stop."
+        local lock_sys_msg
+        lock_sys_msg="🔒 Fusion state operation in progress"
+        emit_block_response "$lock_reason" "$lock_sys_msg"
     fi
 
     # Read status
@@ -293,6 +494,7 @@ main() {
 
     # Only block if workflow is in_progress
     if [ "$status" != "in_progress" ]; then
+        hook_debug_log "allow: status=$status"
         reset_block_count
         exit 0
     fi
@@ -380,8 +582,7 @@ main() {
             # Output JSON to stdout for advanced API
             local prompt="Continue with task decomposition for goal: ${goal:-'(not set)'}. Create .fusion/task_plan.md with tasks."
             local sys_msg="🔄 Fusion iteration $iteration | Phase: ${current_phase:-DECOMPOSE} | Create task_plan.md"
-            output_block_json "$prompt" "$sys_msg"
-            exit 0
+            emit_block_response "$prompt" "$sys_msg"
         fi
 
         # Later phases without task_plan.md is an error - mark as stuck
@@ -392,6 +593,7 @@ main() {
 
     # If no remaining tasks, allow stop and update status
     if [ "$total_remaining" -eq 0 ]; then
+        hook_debug_log "allow: all tasks done phase=${current_phase:-unknown}"
         if json_set "$FUSION_DIR/sessions.json" "status" "completed"; then
             # Reset guardian for next workflow
             if [ "$GUARDIAN_ENABLED" = true ]; then
@@ -453,8 +655,7 @@ Please review:
 
 What would you like to do?"
                 local sys_msg="⚠️ ESCALATE: Pattern detected - asking user for guidance"
-                output_block_json "$prompt" "$sys_msg"
-                exit 0
+                emit_block_response "$prompt" "$sys_msg"
                 ;;
             "BACKOFF")
                 # Warning sign - add context to prompt
@@ -465,8 +666,7 @@ What would you like to do?"
 ⚠️ Warning: LoopGuardian detected potential stagnation.
 Consider: trying a different approach, checking for blockers, or asking for help."
                 local sys_msg="🔄 Fusion (BACKOFF) | Phase: ${current_phase:-EXECUTE} | Remaining: $total_remaining | $(guardian_get '.metrics.no_progress_rounds') no-progress rounds"
-                output_block_json "$prompt" "$sys_msg"
-                exit 0
+                emit_block_response "$prompt" "$sys_msg"
                 ;;
             *)
                 # CONTINUE - normal flow
@@ -507,10 +707,8 @@ Note: Phase auto-corrected to $current_phase based on task states."
     local sys_msg="🔄 Fusion iteration $iteration | Phase: ${current_phase:-EXECUTE} | Remaining: $total_remaining | Next: $next_task"
 
     # Output JSON to stdout (advanced stop hook API)
-    output_block_json "$prompt" "$sys_msg"
-
-    # Exit 0 for successful hook execution (JSON output handles the block)
-    exit 0
+    hook_debug_log "block: phase=${current_phase:-EXECUTE} remaining=$total_remaining next=${next_task:-unknown}"
+    emit_block_response "$prompt" "$sys_msg"
 }
 
 main "$@"

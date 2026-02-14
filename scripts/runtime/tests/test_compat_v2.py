@@ -250,6 +250,14 @@ class TestAdaptPosttool(BaseTestCase):
             "### Task 1: A [COMPLETED]\n"
             "### Task 2: B [FAILED]\n"
         )
+        with open(self.fusion_dir / "config.yaml", "w", encoding="utf-8") as f:
+            f.write(
+                "runtime:\n"
+                "  enabled: true\n"
+                "  compat_mode: true\n"
+                "safe_backlog:\n"
+                "  enabled: false\n"
+            )
 
         snap_file = self.fusion_dir / ".progress_snapshot"
         snap_file.write_text("1:1:0:0")
@@ -265,6 +273,14 @@ class TestAdaptPosttool(BaseTestCase):
             "### Task 1: A [COMPLETED]\n"
             "### Task 2: B [COMPLETED]\n"
         )
+        with open(self.fusion_dir / "config.yaml", "w", encoding="utf-8") as f:
+            f.write(
+                "runtime:\n"
+                "  enabled: true\n"
+                "  compat_mode: true\n"
+                "safe_backlog:\n"
+                "  enabled: false\n"
+            )
 
         snap_file = self.fusion_dir / ".progress_snapshot"
         snap_file.write_text("1:1:0:0")

@@ -14,6 +14,39 @@
 
 FUSION_DIR=".fusion"
 
+is_truthy() {
+    case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
+        1|true|yes|on)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+hook_debug_enabled() {
+    if is_truthy "${FUSION_HOOK_DEBUG:-}"; then
+        return 0
+    fi
+
+    [ -f "$FUSION_DIR/.hook_debug" ]
+}
+if [ "$#" -gt 0 ]; then
+    case "$1" in
+        -h|--help)
+            echo "Usage: fusion-continue.sh"
+            exit 0
+            ;;
+        *)
+            echo "❌ Unknown option: $1" >&2
+            echo "Usage: fusion-continue.sh" >&2
+            exit 1
+            ;;
+    esac
+fi
+
+
 # Exit early if no fusion directory (not in a fusion workflow)
 if [ ! -d "$FUSION_DIR" ]; then
     exit 0
@@ -49,6 +82,12 @@ if [ -f "$FUSION_DIR/progress.md" ]; then
         echo "" >> "$FUSION_DIR/progress.md"
         echo "<!-- [CONTINUE] Phase: $CURRENT_PHASE | Pending: $PENDING_COUNT | Check task_plan.md and continue -->" >> "$FUSION_DIR/progress.md"
     fi
+fi
+
+if hook_debug_enabled; then
+    echo "[fusion][hooks] Hook debug: ON (stderr + .fusion/hook-debug.log)"
+else
+    echo "[fusion][hooks] Hook debug: OFF (enable: touch .fusion/.hook_debug)"
 fi
 
 exit 0

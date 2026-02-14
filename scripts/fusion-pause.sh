@@ -4,8 +4,41 @@ set -euo pipefail
 
 FUSION_DIR=".fusion"
 STATE_LOCK="${FUSION_DIR}/.state.lock"
+
+is_truthy() {
+    case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
+        1|true|yes|on)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+hook_debug_enabled() {
+    if is_truthy "${FUSION_HOOK_DEBUG:-}"; then
+        return 0
+    fi
+
+    [ -f "$FUSION_DIR/.hook_debug" ]
+}
 LOCK_STALE_SECONDS=300  # 5 minutes
 LOCK_ACQUIRED=false
+if [ "$#" -gt 0 ]; then
+    case "$1" in
+        -h|--help)
+            echo "Usage: fusion-pause.sh"
+            exit 0
+            ;;
+        *)
+            echo "❌ Unknown option: $1" >&2
+            echo "Usage: fusion-pause.sh" >&2
+            exit 1
+            ;;
+    esac
+fi
+
 
 # Check if lock is stale
 is_lock_stale() {
@@ -108,3 +141,9 @@ rm -f "$FUSION_DIR/.block_count" 2>/dev/null || true
 echo "⏸️ Workflow paused"
 echo ""
 echo "Current progress saved. Use '/fusion resume' to continue."
+
+if hook_debug_enabled; then
+    echo "[fusion][hooks] Hook debug: ON (stderr + .fusion/hook-debug.log)"
+else
+    echo "[fusion][hooks] Hook debug: OFF (enable: touch .fusion/.hook_debug)"
+fi
