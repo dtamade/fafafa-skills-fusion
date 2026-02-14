@@ -591,27 +591,103 @@ main() {
         exit 0
     fi
 
-    # If no remaining tasks, allow stop and update status
+    # If no remaining tasks, try to inject safe_backlog tasks before allowing stop
     if [ "$total_remaining" -eq 0 ]; then
-        hook_debug_log "allow: all tasks done phase=${current_phase:-unknown}"
-        if json_set "$FUSION_DIR/sessions.json" "status" "completed"; then
-            # Reset guardian for next workflow
-            if [ "$GUARDIAN_ENABLED" = true ]; then
-                guardian_reset
-            fi
+        hook_debug_log "all tasks done, checking safe_backlog injection"
 
-            # Save final checkpoint
-            local timestamp
-            timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-            if [ -f "$FUSION_DIR/progress.md" ]; then
-                echo "| $timestamp | COMPLETE | Workflow finished | OK | All tasks done |" >> "$FUSION_DIR/progress.md"
-            fi
+        # Try to inject safe_backlog tasks if configured
+        local safe_backlog_injected=false
+        if command -v python3 &>/dev/null && [ -f "$SCRIPT_DIR/runtime/safe_backlog.py" ]; then
+            # Check if safe_backlog injection on task exhausted is enabled
+            local inject_enabled
+            inject_enabled=$(PYTHONPATH="$SCRIPT_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 -c "
+import sys
+from runtime.config import load_fusion_config
+try:
+    cfg = load_fusion_config('$FUSION_DIR')
+    enabled = bool(cfg.get('safe_backlog', {}).get('enabled', False))
+    inject = bool(cfg.get('safe_backlog', {}).get('inject_on_task_exhausted', True))
+    print('true' if (enabled and inject) else 'false')
+except Exception:
+    print('false')
+" 2>/dev/null || echo "false")
 
-            exit 0
-        else
-            # JSON update failed - report error but still allow stop
-            echo "⚠️ Failed to update status to completed, but all tasks done" >&2
-            exit 0
+            if [ "$inject_enabled" = "true" ]; then
+                hook_debug_log "safe_backlog injection enabled, generating tasks"
+                # Try to generate safe_backlog tasks
+                local backlog_result
+                backlog_result=$(PYTHONPATH="$SCRIPT_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 -c "
+import sys
+from runtime.safe_backlog import generate_safe_backlog
+try:
+    result = generate_safe_backlog('$FUSION_DIR', '.')
+    if result.get('added', 0) > 0:
+        print('injected')
+    else:
+        print('none')
+except Exception as e:
+    print('error')
+    print(str(e), file=sys.stderr)
+" 2>/dev/null || echo "error")
+
+                if [ "$backlog_result" = "injected" ]; then
+                    safe_backlog_injected=true
+                    hook_debug_log "safe_backlog tasks injected, continuing workflow"
+
+                    # Re-count tasks after injection
+                    pending_count=$(grep_count "\[PENDING\]" "$FUSION_DIR/task_plan.md")
+                    total_remaining=$((pending_count + in_progress_count + failed_count))
+
+                    # Build continuation prompt with safe_backlog context
+                    local prompt
+                    prompt="Continue executing the Fusion workflow.
+
+Goal: ${goal:-"(not set)"}
+Phase: ${current_phase:-"EXECUTE"}
+Remaining: $total_remaining tasks (safe_backlog tasks injected)
+
+Safe backlog tasks have been automatically added to maintain continuous development.
+These are low-risk quality/documentation/optimization tasks.
+
+Instructions:
+1. Read .fusion/task_plan.md
+2. Find next PENDING or IN_PROGRESS task
+3. Execute based on task type:
+   - implementation/verification → TDD flow (RED→GREEN→REFACTOR)
+   - design/documentation/configuration/research → direct execution
+4. Update task status to [COMPLETED]
+5. Continue until all tasks done
+
+Only ask user if 3-Strike exhausted."
+
+                    local sys_msg="🔄 Fusion (safe_backlog injected) | Phase: ${current_phase:-EXECUTE} | Remaining: $total_remaining"
+                    emit_block_response "$prompt" "$sys_msg"
+                fi
+            fi
+        fi
+
+        # If safe_backlog injection failed or disabled, allow stop
+        if [ "$safe_backlog_injected" = false ]; then
+            hook_debug_log "allow: all tasks done, no safe_backlog injection phase=${current_phase:-unknown}"
+            if json_set "$FUSION_DIR/sessions.json" "status" "completed"; then
+                # Reset guardian for next workflow
+                if [ "$GUARDIAN_ENABLED" = true ]; then
+                    guardian_reset
+                fi
+
+                # Save final checkpoint
+                local timestamp
+                timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+                if [ -f "$FUSION_DIR/progress.md" ]; then
+                    echo "| $timestamp | COMPLETE | Workflow finished | OK | All tasks done |" >> "$FUSION_DIR/progress.md"
+                fi
+
+                exit 0
+            else
+                # JSON update failed - report error but still allow stop
+                echo "⚠️ Failed to update status to completed, but all tasks done" >&2
+                exit 0
+            fi
         fi
     fi
 
