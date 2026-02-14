@@ -162,8 +162,65 @@ def adapt_stop_guard(fusion_dir: str = ".fusion") -> StopGuardResult:
             events_dispatched.append(result.event.name)
             phase_corrected = True
 
-    # 所有任务完成，允许停止
+    # 所有任务完成，尝试注入 safe_backlog 任务
     if total_remaining == 0 and counts["completed"] > 0:
+        cfg = load_fusion_config(fusion_dir)
+        safe_backlog_enabled = bool(cfg.get("safe_backlog", {}).get("enabled", False))
+        inject_on_exhausted = bool(cfg.get("safe_backlog", {}).get("inject_on_task_exhausted", True))
+
+        if safe_backlog_enabled and inject_on_exhausted:
+            # 尝试生成 safe_backlog 任务
+            try:
+                project_root = str(Path(fusion_dir).resolve().parent)
+                backlog_result = generate_safe_backlog(
+                    fusion_dir=fusion_dir,
+                    project_root=project_root,
+                )
+
+                added = int(backlog_result.get("added", 0))
+                if added > 0:
+                    # 成功注入任务，重新计数并继续阻止
+                    counts = _read_task_counts(fusion_dir)
+                    total_remaining = counts["pending"] + counts["in_progress"] + counts["failed"]
+                    next_task = _find_next_task(fusion_dir)
+                    goal = _read_goal(fusion_dir)
+                    updated_phase = state_to_phase(kernel.current_state)
+
+                    reason = f"""Continue executing the Fusion workflow.
+
+Goal: {goal or '(not set)'}
+Phase: {updated_phase}
+Remaining: {total_remaining} tasks (safe_backlog tasks injected)
+
+Safe backlog tasks have been automatically added to maintain continuous development.
+These are low-risk quality/documentation/optimization tasks.
+
+Instructions:
+1. Read .fusion/task_plan.md
+2. Find next PENDING or IN_PROGRESS task
+3. Execute based on task type:
+   - implementation/verification → TDD flow (RED→GREEN→REFACTOR)
+   - design/documentation/configuration/research → direct execution
+4. Update task status to [COMPLETED]
+5. Continue until all tasks done
+
+Only ask user if 3-Strike exhausted."""
+
+                    system_message = f"🔄 Fusion (safe_backlog injected) | Phase: {updated_phase} | Remaining: {total_remaining}"
+
+                    return StopGuardResult(
+                        should_block=True,
+                        decision="block",
+                        reason=reason,
+                        system_message=system_message,
+                        phase_corrected=phase_corrected,
+                        events_dispatched=events_dispatched,
+                    )
+            except Exception:
+                # safe_backlog 注入失败，继续允许停止
+                pass
+
+        # safe_backlog 未启用或注入失败，允许停止
         return StopGuardResult(
             should_block=False,
             decision="allow",
