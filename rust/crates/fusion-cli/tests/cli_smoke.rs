@@ -44,6 +44,43 @@ fn prepend_path(dir: &Path) -> std::ffi::OsString {
     std::env::join_paths(paths).expect("join PATH")
 }
 
+fn bash_script_arg(path: &Path) -> String {
+    #[cfg(windows)]
+    {
+        let mut value = path.to_string_lossy().replace('\\', "/");
+        if let Some(stripped) = value.strip_prefix("//?/") {
+            value = stripped.to_string();
+        }
+        let bytes = value.as_bytes();
+        if bytes.len() >= 2 && bytes[1] == b':' {
+            let drive = value[..1].to_ascii_lowercase();
+            let rest = &value[2..];
+            return format!("/{drive}{rest}");
+        }
+        value
+    }
+    #[cfg(not(windows))]
+    {
+        path.to_string_lossy().into_owned()
+    }
+}
+
+fn claude_project_slug_for_test(project_path: &Path) -> String {
+    let mut normalized = project_path.to_string_lossy().replace('\\', "/");
+    if let Some(stripped) = normalized.strip_prefix("//?/") {
+        normalized = stripped.to_string();
+    }
+    let bytes = normalized.as_bytes();
+    if bytes.len() >= 2 && bytes[1] == b':' {
+        normalized = normalized[2..].to_string();
+    }
+    let mut sanitized = normalized.replace('/', "-");
+    if !sanitized.starts_with('-') {
+        sanitized.insert(0, '-');
+    }
+    sanitized.replace('_', "-")
+}
+
 fn normalize_whitespace(value: &str) -> String {
     value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
@@ -2865,12 +2902,12 @@ fn status_json_outputs_machine_readable_summary() {
     assert!(payload
         .get("hook_debug_flag")
         .and_then(|v| v.as_str())
-        .map(|v| v.ends_with(".fusion/.hook_debug"))
+        .map(|v| v.replace('\\', "/").ends_with(".fusion/.hook_debug"))
         .unwrap_or(false));
     assert!(payload
         .get("hook_debug_log")
         .and_then(|v| v.as_str())
-        .map(|v| v.ends_with(".fusion/hook-debug.log"))
+        .map(|v| v.replace('\\', "/").ends_with(".fusion/hook-debug.log"))
         .unwrap_or(false));
     let hook_debug_tail: Vec<&str> = payload["hook_debug_tail"]
         .as_array()
@@ -4361,15 +4398,8 @@ fn catchup_reports_unsynced_context_and_next_task() {
     )
     .expect("sessions file");
 
-    let project_root = fs::canonicalize(&project)
-        .expect("canonical project")
-        .to_string_lossy()
-        .replace('\\', "/");
-    let mut sanitized = project_root.replace('/', "-");
-    if !sanitized.starts_with('-') {
-        sanitized.insert(0, '-');
-    }
-    sanitized = sanitized.replace('_', "-");
+    let canonical_project = fs::canonicalize(&project).expect("canonical project");
+    let sanitized = claude_project_slug_for_test(&canonical_project);
 
     let claude_projects = temp
         .path()
@@ -5078,7 +5108,9 @@ fn shell_pretool_fallback_prints_progress_bar_and_tdd_guidance() {
 
     let output = Command::new("bash")
         .current_dir(temp.path())
-        .arg(repo_root.join("scripts/fusion-pretool.sh"))
+        .arg(bash_script_arg(
+            &repo_root.join("scripts/fusion-pretool.sh"),
+        ))
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell pretool fallback");
@@ -5134,7 +5166,9 @@ fn shell_pretool_fallback_prints_direct_execution_for_research_tasks() {
 
     let output = Command::new("bash")
         .current_dir(temp.path())
-        .arg(repo_root.join("scripts/fusion-pretool.sh"))
+        .arg(bash_script_arg(
+            &repo_root.join("scripts/fusion-pretool.sh"),
+        ))
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell pretool fallback");
@@ -5195,7 +5229,9 @@ fn shell_pretool_fallback_marks_in_progress_task_and_guardian_warning() {
 
     let output = Command::new("bash")
         .current_dir(temp.path())
-        .arg(repo_root.join("scripts/fusion-pretool.sh"))
+        .arg(bash_script_arg(
+            &repo_root.join("scripts/fusion-pretool.sh"),
+        ))
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell pretool fallback");
@@ -5266,7 +5302,9 @@ fn shell_pretool_fallback_prints_scheduler_and_agent_batch_summary() {
 
     let output = Command::new("bash")
         .current_dir(temp.path())
-        .arg(repo_root.join("scripts/fusion-pretool.sh"))
+        .arg(bash_script_arg(
+            &repo_root.join("scripts/fusion-pretool.sh"),
+        ))
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell pretool fallback");
@@ -5345,7 +5383,9 @@ fn shell_pretool_fallback_prints_agent_handoff_summary() {
 
     let output = Command::new("bash")
         .current_dir(temp.path())
-        .arg(repo_root.join("scripts/fusion-pretool.sh"))
+        .arg(bash_script_arg(
+            &repo_root.join("scripts/fusion-pretool.sh"),
+        ))
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell pretool fallback");
@@ -5393,7 +5433,9 @@ fn shell_pretool_fallback_prints_review_gate_guidance() {
 
     let output = Command::new("bash")
         .current_dir(temp.path())
-        .arg(repo_root.join("scripts/fusion-pretool.sh"))
+        .arg(bash_script_arg(
+            &repo_root.join("scripts/fusion-pretool.sh"),
+        ))
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell pretool fallback");
@@ -5867,7 +5909,9 @@ fn shell_posttool_fallback_prints_named_completion_and_next_guidance() {
 
     let output = Command::new("bash")
         .current_dir(temp.path())
-        .arg(repo_root.join("scripts/fusion-posttool.sh"))
+        .arg(bash_script_arg(
+            &repo_root.join("scripts/fusion-posttool.sh"),
+        ))
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell posttool fallback");
@@ -5915,7 +5959,9 @@ fn shell_posttool_fallback_prints_review_gate_next_action() {
 
     let output = Command::new("bash")
         .current_dir(temp.path())
-        .arg(repo_root.join("scripts/fusion-posttool.sh"))
+        .arg(bash_script_arg(
+            &repo_root.join("scripts/fusion-posttool.sh"),
+        ))
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell posttool fallback");
@@ -5962,7 +6008,9 @@ fn shell_posttool_fallback_completed_tasks_report_verify_next_action() {
 
     let output = Command::new("bash")
         .current_dir(temp.path())
-        .arg(repo_root.join("scripts/fusion-posttool.sh"))
+        .arg(bash_script_arg(
+            &repo_root.join("scripts/fusion-posttool.sh"),
+        ))
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell posttool fallback");
@@ -6222,7 +6270,9 @@ fn shell_stop_guard_fallback_blocks_when_pending_tasks_exist() {
 
     let output = Command::new("bash")
         .current_dir(temp.path())
-        .arg(repo_root.join("scripts/fusion-stop-guard.sh"))
+        .arg(bash_script_arg(
+            &repo_root.join("scripts/fusion-stop-guard.sh"),
+        ))
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell stop-guard fallback");
@@ -6282,7 +6332,9 @@ fn shell_stop_guard_fallback_review_gate_requires_reviewer_approval() {
 
     let output = Command::new("bash")
         .current_dir(temp.path())
-        .arg(repo_root.join("scripts/fusion-stop-guard.sh"))
+        .arg(bash_script_arg(
+            &repo_root.join("scripts/fusion-stop-guard.sh"),
+        ))
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell stop-guard fallback");
@@ -6344,7 +6396,9 @@ fn shell_stop_guard_fallback_without_tasks_surfaces_decompose_next_action() {
 
     let output = Command::new("bash")
         .current_dir(temp.path())
-        .arg(repo_root.join("scripts/fusion-stop-guard.sh"))
+        .arg(bash_script_arg(
+            &repo_root.join("scripts/fusion-stop-guard.sh"),
+        ))
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell stop-guard fallback");
@@ -6645,7 +6699,10 @@ fn run_without_task_plan_surfaces_decompose_next_action() {
             "#!/bin/bash\nset -euo pipefail\ncat > \"{}\" <<'EOF'\n### Task 1: Bootstrap [COMPLETED]\nEOF\necho ok\n",
             fusion.join("task_plan.md").display()
         ),
-        "@echo off\r\necho ok\r\n",
+        &format!(
+            "@echo off\r\nset \"PLAN={}\"\r\npowershell -NoProfile -Command \"$p=$env:PLAN; Set-Content -Path $p -Value '### Task 1: Bootstrap [COMPLETED]'\"\r\necho ok\r\n",
+            fusion.join("task_plan.md").display()
+        ),
     );
     let path = prepend_path(&bin_dir);
 

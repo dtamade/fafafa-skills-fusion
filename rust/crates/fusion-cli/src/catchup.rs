@@ -78,8 +78,11 @@ fn resolve_fusion_dir(project_path: &Path, fusion_dir: &Path) -> PathBuf {
     }
 }
 
-fn claude_project_dir(project_path: &Path) -> PathBuf {
+fn claude_project_slug(project_path: &Path) -> String {
     let mut normalized = project_path.to_string_lossy().replace('\\', "/");
+    if let Some(stripped) = normalized.strip_prefix("//?/") {
+        normalized = stripped.to_string();
+    }
     let bytes = normalized.as_bytes();
     if bytes.len() >= 2 && bytes[1] == b':' {
         normalized = normalized[2..].to_string();
@@ -88,7 +91,11 @@ fn claude_project_dir(project_path: &Path) -> PathBuf {
     if !sanitized.starts_with('-') {
         sanitized.insert(0, '-');
     }
-    sanitized = sanitized.replace('_', "-");
+    sanitized.replace('_', "-")
+}
+
+fn claude_project_dir(project_path: &Path) -> PathBuf {
+    let sanitized = claude_project_slug(project_path);
     PathBuf::from(env::var_os("HOME").unwrap_or_default())
         .join(".claude")
         .join("projects")
@@ -115,4 +122,28 @@ fn get_git_diff_stat(project_path: &Path) -> String {
         return String::new();
     }
     String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::claude_project_slug;
+    use std::path::Path;
+
+    #[test]
+    fn claude_project_slug_normalizes_windows_verbatim_drive_paths() {
+        assert_eq!(
+            claude_project_slug(Path::new(
+                r"\\?\C:\Users\runneradmin\AppData\Local\Temp\demo_project"
+            )),
+            "-Users-runneradmin-AppData-Local-Temp-demo-project"
+        );
+    }
+
+    #[test]
+    fn claude_project_slug_normalizes_unix_paths() {
+        assert_eq!(
+            claude_project_slug(Path::new("/tmp/demo_project")),
+            "-tmp-demo-project"
+        );
+    }
 }
