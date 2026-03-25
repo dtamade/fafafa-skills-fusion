@@ -184,7 +184,7 @@ require_bin "$GH_BIN"
 require_bin jq
 
 workflow_json="$("$GH_BIN" api "repos/$REPO/actions/workflows")"
-workflow_id="$(printf '%s' "$workflow_json" | jq -r --arg path "$WORKFLOW_PATH" '.workflows[] | select(.path == $path) | .id' | head -n 1)"
+workflow_id="$(printf '%s' "$workflow_json" | jq -r --arg path "$WORKFLOW_PATH" '[.workflows[] | select(.path == $path) | .id] | first // empty')"
 
 if [[ -z "$workflow_id" ]]; then
     payload="$(build_payload "error" "workflow_not_found" "null" "null" "" "" "" "" "" "" "[]" "[]" "false")"
@@ -194,7 +194,7 @@ if [[ -z "$workflow_id" ]]; then
 fi
 
 runs_json="$("$GH_BIN" api "repos/$REPO/actions/workflows/$workflow_id/runs?branch=$BRANCH&per_page=$LIMIT")"
-run_json="$(printf '%s' "$runs_json" | jq -c '.workflow_runs[] | select(.status == "completed")' | head -n 1)"
+run_json="$(printf '%s' "$runs_json" | jq -c '[.workflow_runs[] | select(.status == "completed")] | sort_by(.created_at, .id) | last // empty')"
 
 if [[ -z "$run_json" ]]; then
     payload="$(build_payload "error" "no_completed_run" "$workflow_id" "null" "" "" "" "" "" "" "[]" "[]" "false")"

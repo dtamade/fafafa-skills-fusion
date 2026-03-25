@@ -213,7 +213,7 @@ See `templates/config.yaml` for the full recommended baseline, including `schedu
 - No alternate runtime engine selection remains on the current control path; the old runtime/reference layer has been removed from the repository.
 - `compat_mode: true` keeps live hook and helper fallback on the Shell path when the Rust bridge is skipped or unavailable, and the thin wrapper control scripts still require `fusion-bridge`.
 - CI release gates run on `ubuntu-latest`; the workflow also includes a `macos-latest` smoke job and a `windows-latest` Git Bash smoke job for cross-platform evidence across shell helpers, control wrappers, real hook paths, and the catchup recovery wrapper.
-- macOS and Windows (Git Bash) are still described as partially verified until fresh CI evidence upgrades that wording; see [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md).
+- As of 2026-03-25, macOS and Windows (Git Bash) have fresh remote CI promotion evidence via run `23539348456`; see [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md).
 - WSL is tracked as post-GA evidence rather than a current GA blocker.
 
 ## Dependency Auto-Heal

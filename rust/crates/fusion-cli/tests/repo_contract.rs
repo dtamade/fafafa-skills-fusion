@@ -705,7 +705,7 @@ fn active_docs_and_templates_use_rust_only_validation() {
     ));
     assert!(contains_normalized(
         &readme,
-        "macOS and Windows (Git Bash) are still described as partially verified until fresh CI evidence upgrades that wording"
+        "As of 2026-03-25, macOS and Windows (Git Bash) have fresh remote CI promotion evidence via run `23539348456`"
     ));
     assert!(contains_normalized(
         &readme,
@@ -804,7 +804,7 @@ fn active_docs_and_templates_use_rust_only_validation() {
     assert!(contains_normalized(&readme_zh, "agent_collaboration_mode"));
     assert!(contains_normalized(
         &readme_zh,
-        "macOS 与 Windows (Git Bash) 当前仍按“部分验证”口径描述，待新的 CI 绿灯或实机证据后再升级表述"
+        "截至 2026-03-25，macOS 与 Windows (Git Bash) 已通过远端 CI promotion evidence 升级为已验证状态，对应 run 为 `23539348456`"
     ));
     assert!(contains_normalized(
         &readme_zh,

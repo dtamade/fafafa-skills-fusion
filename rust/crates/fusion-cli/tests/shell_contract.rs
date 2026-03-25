@@ -492,9 +492,16 @@ case "$2" in
     fi
     ;;
   repos/example/repo/actions/workflows/123/runs?branch=main\&per_page=10)
-    printf '%s\n' '{"workflow_runs":[{"id":456,"html_url":"https://example.invalid/runs/456","status":"completed","conclusion":"success","head_sha":"abc123","created_at":"2026-03-24T10:00:00Z","updated_at":"2026-03-24T10:05:00Z"}]}'
+    printf '%s\n' '{"workflow_runs":[
+      {"id":456,"html_url":"https://example.invalid/runs/456","status":"completed","conclusion":"failure","head_sha":"old456","created_at":"2026-03-24T09:00:00Z","updated_at":"2026-03-24T09:05:00Z"},
+      {"id":999,"html_url":"https://example.invalid/runs/999","status":"in_progress","conclusion":null,"head_sha":"live999","created_at":"2026-03-24T11:00:00Z","updated_at":"2026-03-24T11:01:00Z"},
+      {"id":789,"html_url":"https://example.invalid/runs/789","status":"completed","conclusion":"success","head_sha":"abc123","created_at":"2026-03-24T10:00:00Z","updated_at":"2026-03-24T10:05:00Z"}
+    ]}'
     ;;
   repos/example/repo/actions/runs/456/jobs)
+    printf '%s\n' '{"jobs":[{"name":"contract-gates","status":"completed","conclusion":"success"},{"name":"cross-platform-smoke-macos","status":"completed","conclusion":"failure"},{"name":"cross-platform-smoke-windows","status":"completed","conclusion":"failure"}]}'
+    ;;
+  repos/example/repo/actions/runs/789/jobs)
     printf '%s\n' '{"jobs":[{"name":"contract-gates","status":"completed","conclusion":"success"},{"name":"cross-platform-smoke-macos","status":"completed","conclusion":"success"},{"name":"cross-platform-smoke-windows","status":"completed","conclusion":"success"}]}'
     ;;
   *)
@@ -555,7 +562,7 @@ esac
     assert_eq!(payload["schema_version"].as_str(), Some("v1"));
     assert_eq!(payload["result"].as_str(), Some("ok"));
     assert_eq!(payload["promotion_ready"].as_bool(), Some(true));
-    assert_eq!(payload["run_id"].as_u64(), Some(456));
+    assert_eq!(payload["run_id"].as_u64(), Some(789));
     assert_eq!(payload["run_conclusion"].as_str(), Some("success"));
     assert_eq!(
         required_jobs,

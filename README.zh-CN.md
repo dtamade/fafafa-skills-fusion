@@ -255,7 +255,7 @@ git:
 - live 控制路径已不再提供其他 runtime engine 这类运行时选择；旧 runtime/reference 层已从仓库移除。
 - `compat_mode: true` 表示当 Rust bridge 被跳过或不可用时，hook 和非薄包装辅助路径会回退到 Shell 兜底路径；控制面薄包装脚本仍要求 `fusion-bridge`。
 - CI 的 release 门禁运行在 `ubuntu-latest`，同时 workflow 已补充 `macos-latest` smoke job，以及 `windows-latest` 的 Git Bash smoke job，用于覆盖 shell helper、控制面薄包装、真实 hook 路径与 catchup 恢复包装的跨平台证据。
-- macOS 与 Windows (Git Bash) 当前仍按“部分验证”口径描述，待新的 CI 绿灯或实机证据后再升级表述；详见 [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
+- 截至 2026-03-25，macOS 与 Windows (Git Bash) 已通过远端 CI promotion evidence 升级为已验证状态，对应 run 为 `23539348456`；详见 [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
 - WSL 当前仍按 post-GA 证据跟踪，不是当前 GA 阻断项。
 
 ## Safe Backlog 托底（长期自治防停摆）
