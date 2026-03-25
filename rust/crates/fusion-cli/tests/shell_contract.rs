@@ -65,6 +65,11 @@ fn retired_test_command() -> String {
     [["py", "test"].concat(), " -q".to_string()].concat()
 }
 
+#[cfg(unix)]
+fn create_dir_alias(target: &Path, alias: &Path) {
+    std::os::unix::fs::symlink(target, alias).expect("create directory alias");
+}
+
 #[test]
 fn ci_cross_platform_smoke_script_help_and_end_to_end() {
     let root = repo_root();
@@ -143,6 +148,53 @@ fn ci_cross_platform_smoke_script_help_and_end_to_end() {
         summary["selfcheck_contract_regression_skipped"].as_bool(),
         Some(true)
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn ci_cross_platform_smoke_accepts_canonicalized_selfcheck_project_root() {
+    let root = repo_root();
+    let script = root.join("scripts/ci-cross-platform-smoke.sh");
+    let bridge = release_bridge_bin();
+    let bridge_str = bridge.to_string_lossy().into_owned();
+    let temp = tempdir().expect("tempdir");
+    let real_tmpdir = temp.path().join("real-tmpdir");
+    let alias_tmpdir = temp.path().join("tmpdir-alias");
+    let artifacts = temp.path().join("artifacts");
+    let artifacts_str = artifacts.to_string_lossy().into_owned();
+
+    fs::create_dir_all(&real_tmpdir).expect("create real tmpdir");
+    create_dir_alias(&real_tmpdir, &alias_tmpdir);
+
+    let alias_tmpdir_str = alias_tmpdir.to_string_lossy().into_owned();
+    let run = run_bash_script(
+        &script,
+        &[
+            "--artifacts-dir",
+            &artifacts_str,
+            "--platform-label",
+            "canonical-path-contract",
+        ],
+        &[
+            ("FUSION_BRIDGE_BIN", &bridge_str),
+            ("TMPDIR", &alias_tmpdir_str),
+        ],
+    );
+    assert!(
+        run.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+
+    let summary_path = artifacts.join("cross-platform-smoke-summary.json");
+    assert!(summary_path.is_file());
+    let summary: Value = serde_json::from_str(
+        &fs::read_to_string(&summary_path).expect("read cross-platform smoke summary"),
+    )
+    .expect("parse cross-platform smoke summary");
+    assert_eq!(summary["result"].as_str(), Some("ok"));
+    assert_eq!(summary["selfcheck_result"].as_str(), Some("ok"));
 }
 
 #[test]
