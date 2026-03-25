@@ -84,6 +84,20 @@ fn hook_adapter_avoids_nonportable_case_fallthrough_tokens() {
 }
 
 #[test]
+fn shell_helpers_avoid_nonportable_awk_match_array_captures() {
+    let pretool = fs::read_to_string(repo_root().join("scripts/lib/fusion-pretool-fallback.sh"))
+        .expect("read fusion-pretool-fallback.sh");
+
+    for (line_number, line) in pretool.lines().enumerate() {
+        assert!(
+            !(line_contains_normalized(line, "match(") && line_contains_normalized(line, ", m)")),
+            "fusion-pretool-fallback.sh must avoid awk match(..., ..., m) capture arrays on line {}",
+            line_number + 1
+        );
+    }
+}
+
+#[test]
 fn ci_cross_platform_smoke_script_help_and_end_to_end() {
     let root = repo_root();
     let script = root.join("scripts/ci-cross-platform-smoke.sh");

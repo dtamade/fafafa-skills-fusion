@@ -18,6 +18,12 @@ fusion_pretool_pretty_json_scalar() {
             }
         }
     }
+    function extract_key(text,    key) {
+        key = text
+        sub(/^[[:space:]]*"/, "", key)
+        sub(/".*$/, "", key)
+        return key
+    }
     function build_path(indent, key,    level, path) {
         path = ""
         for (level = 0; level < indent; level += 2) {
@@ -37,39 +43,51 @@ fusion_pretool_pretty_json_scalar() {
             next
         }
 
-        if (match(line, /^[[:space:]]*"([^"]+)":[[:space:]]*\{[[:space:]]*,?[[:space:]]*$/, m)) {
+        if (line ~ /^[[:space:]]*"[^"]+"[[:space:]]*:[[:space:]]*\{[[:space:]]*,?[[:space:]]*$/) {
             clear_deeper(indent)
-            parts[indent] = m[1]
+            parts[indent] = extract_key(line)
             next
         }
 
-        if (match(line, /^[[:space:]]*"([^"]+)":[[:space:]]*\[[[:space:]]*$/, m)) {
+        if (line ~ /^[[:space:]]*"[^"]+"[[:space:]]*:[[:space:]]*\[[[:space:]]*$/) {
             clear_deeper(indent + 2)
             next
         }
 
-        if (mode == "string" && match(line, /^[[:space:]]*"([^"]+)":[[:space:]]*"([^"]*)"[[:space:]]*,?[[:space:]]*$/, m)) {
+        if (mode == "string" && line ~ /^[[:space:]]*"[^"]+"[[:space:]]*:[[:space:]]*".*"[[:space:]]*,?[[:space:]]*$/) {
             clear_deeper(indent + 2)
-            if (build_path(indent, m[1]) == target) {
-                print m[2]
+            key = extract_key(line)
+            value = line
+            sub(/^[[:space:]]*"[^"]+"[[:space:]]*:[[:space:]]*"/, "", value)
+            sub(/"[[:space:]]*,?[[:space:]]*$/, "", value)
+            if (build_path(indent, key) == target) {
+                print value
                 exit
             }
             next
         }
 
-        if (mode == "number" && match(line, /^[[:space:]]*"([^"]+)":[[:space:]]*(-?[0-9]+)[[:space:]]*,?[[:space:]]*$/, m)) {
+        if (mode == "number" && line ~ /^[[:space:]]*"[^"]+"[[:space:]]*:[[:space:]]*-?[0-9]+[[:space:]]*,?[[:space:]]*$/) {
             clear_deeper(indent + 2)
-            if (build_path(indent, m[1]) == target) {
-                print m[2]
+            key = extract_key(line)
+            value = line
+            sub(/^[[:space:]]*"[^"]+"[[:space:]]*:[[:space:]]*/, "", value)
+            sub(/[[:space:]]*,?[[:space:]]*$/, "", value)
+            if (build_path(indent, key) == target) {
+                print value
                 exit
             }
             next
         }
 
-        if (mode == "bool" && match(line, /^[[:space:]]*"([^"]+)":[[:space:]]*(true|false)[[:space:]]*,?[[:space:]]*$/, m)) {
+        if (mode == "bool" && line ~ /^[[:space:]]*"[^"]+"[[:space:]]*:[[:space:]]*(true|false)[[:space:]]*,?[[:space:]]*$/) {
             clear_deeper(indent + 2)
-            if (build_path(indent, m[1]) == target) {
-                print m[2]
+            key = extract_key(line)
+            value = line
+            sub(/^[[:space:]]*"[^"]+"[[:space:]]*:[[:space:]]*/, "", value)
+            sub(/[[:space:]]*,?[[:space:]]*$/, "", value)
+            if (build_path(indent, key) == target) {
+                print value
                 exit
             }
         }
@@ -94,6 +112,18 @@ fusion_pretool_pretty_json_string_array_csv() {
             }
         }
     }
+    function extract_key(text,    key) {
+        key = text
+        sub(/^[[:space:]]*"/, "", key)
+        sub(/".*$/, "", key)
+        return key
+    }
+    function extract_item(text,    item) {
+        item = text
+        sub(/^[[:space:]]*"/, "", item)
+        sub(/"[[:space:]]*,?[[:space:]]*$/, "", item)
+        return item
+    }
     function build_path(indent, key,    level, path) {
         path = ""
         for (level = 0; level < indent; level += 2) {
@@ -112,8 +142,8 @@ fusion_pretool_pretty_json_string_array_csv() {
             if (line ~ /^[[:space:]]*\][[:space:]]*,?[[:space:]]*$/) {
                 exit
             }
-            if (match(line, /^[[:space:]]*"([^"]+)"[[:space:]]*,?[[:space:]]*$/, m)) {
-                items[++count] = m[1]
+            if (line ~ /^[[:space:]]*".*"[[:space:]]*,?[[:space:]]*$/) {
+                items[++count] = extract_item(line)
             }
             next
         }
@@ -123,15 +153,15 @@ fusion_pretool_pretty_json_string_array_csv() {
             next
         }
 
-        if (match(line, /^[[:space:]]*"([^"]+)":[[:space:]]*\{[[:space:]]*,?[[:space:]]*$/, m)) {
+        if (line ~ /^[[:space:]]*"[^"]+"[[:space:]]*:[[:space:]]*\{[[:space:]]*,?[[:space:]]*$/) {
             clear_deeper(indent)
-            parts[indent] = m[1]
+            parts[indent] = extract_key(line)
             next
         }
 
-        if (match(line, /^[[:space:]]*"([^"]+)":[[:space:]]*\[[[:space:]]*$/, m)) {
+        if (line ~ /^[[:space:]]*"[^"]+"[[:space:]]*:[[:space:]]*\[[[:space:]]*$/) {
             clear_deeper(indent + 2)
-            if (build_path(indent, m[1]) == target) {
+            if (build_path(indent, extract_key(line)) == target) {
                 in_target = 1
             }
         }

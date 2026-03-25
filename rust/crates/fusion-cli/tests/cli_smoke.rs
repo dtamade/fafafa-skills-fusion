@@ -4361,7 +4361,10 @@ fn catchup_reports_unsynced_context_and_next_task() {
     )
     .expect("sessions file");
 
-    let project_root = project.to_string_lossy().replace('\\', "/");
+    let project_root = fs::canonicalize(&project)
+        .expect("canonical project")
+        .to_string_lossy()
+        .replace('\\', "/");
     let mut sanitized = project_root.replace('/', "-");
     if !sanitized.starts_with('-') {
         sanitized.insert(0, '-');
