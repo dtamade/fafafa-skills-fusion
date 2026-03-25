@@ -44,7 +44,13 @@ fn prepend_path(dir: &Path) -> std::ffi::OsString {
     std::env::join_paths(paths).expect("join PATH")
 }
 
-fn bash_script_arg(path: &Path) -> String {
+#[derive(Debug, PartialEq, Eq)]
+struct BashScriptLaunch {
+    current_dir: Option<PathBuf>,
+    args: Vec<String>,
+}
+
+fn bash_path_arg(path: &Path) -> String {
     #[cfg(windows)]
     {
         let mut value = path.to_string_lossy().replace('\\', "/");
@@ -63,6 +69,75 @@ fn bash_script_arg(path: &Path) -> String {
     {
         path.to_string_lossy().into_owned()
     }
+}
+
+fn bash_script_launch(cwd: &Path, script: &Path) -> BashScriptLaunch {
+    #[cfg(windows)]
+    {
+        BashScriptLaunch {
+            current_dir: None,
+            args: vec![
+                "-lc".to_string(),
+                "cd \"$1\" && shift && exec \"$@\"".to_string(),
+                "bash".to_string(),
+                bash_path_arg(cwd),
+                "bash".to_string(),
+                bash_path_arg(script),
+            ],
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        BashScriptLaunch {
+            current_dir: Some(cwd.to_path_buf()),
+            args: vec![bash_path_arg(script)],
+        }
+    }
+}
+
+fn bash_script_command(cwd: &Path, script: &Path) -> Command {
+    let launch = bash_script_launch(cwd, script);
+    let mut command = Command::new("bash");
+    if let Some(dir) = launch.current_dir {
+        command.current_dir(dir);
+    }
+    command.args(&launch.args);
+    command
+}
+
+#[cfg(not(windows))]
+#[test]
+fn bash_script_launch_keeps_process_workdir_on_unix() {
+    let launch = bash_script_launch(
+        Path::new("/tmp/fusion-workdir"),
+        Path::new("/repo/scripts/fusion-pretool.sh"),
+    );
+    assert_eq!(
+        launch.current_dir,
+        Some(PathBuf::from("/tmp/fusion-workdir"))
+    );
+    assert_eq!(launch.args, vec!["/repo/scripts/fusion-pretool.sh"]);
+}
+
+#[cfg(windows)]
+#[test]
+fn bash_script_launch_uses_shell_cd_for_windows_verbatim_workdir() {
+    let launch = bash_script_launch(
+        Path::new(r"\\?\C:\Users\runneradmin\AppData\Local\Temp\fusion-workdir"),
+        Path::new(r"D:\a\fafafa-skills-fusion\fafafa-skills-fusion\scripts\fusion-pretool.sh"),
+    );
+    assert_eq!(launch.current_dir, None);
+    assert_eq!(
+        launch.args,
+        vec![
+            "-lc",
+            "cd \"$1\" && shift && exec \"$@\"",
+            "bash",
+            "/c/Users/runneradmin/AppData/Local/Temp/fusion-workdir",
+            "bash",
+            "/d/a/fafafa-skills-fusion/fafafa-skills-fusion/scripts/fusion-pretool.sh",
+        ]
+    );
 }
 
 fn claude_project_slug_for_test(project_path: &Path) -> String {
@@ -5106,11 +5181,8 @@ fn shell_pretool_fallback_prints_progress_bar_and_tdd_guidance() {
     )
     .expect("loop context");
 
-    let output = Command::new("bash")
-        .current_dir(temp.path())
-        .arg(bash_script_arg(
-            &repo_root.join("scripts/fusion-pretool.sh"),
-        ))
+    let mut cmd = bash_script_command(temp.path(), &repo_root.join("scripts/fusion-pretool.sh"));
+    let output = cmd
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell pretool fallback");
@@ -5164,11 +5236,8 @@ fn shell_pretool_fallback_prints_direct_execution_for_research_tasks() {
     )
     .expect("task plan");
 
-    let output = Command::new("bash")
-        .current_dir(temp.path())
-        .arg(bash_script_arg(
-            &repo_root.join("scripts/fusion-pretool.sh"),
-        ))
+    let mut cmd = bash_script_command(temp.path(), &repo_root.join("scripts/fusion-pretool.sh"));
+    let output = cmd
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell pretool fallback");
@@ -5227,11 +5296,8 @@ fn shell_pretool_fallback_marks_in_progress_task_and_guardian_warning() {
     )
     .expect("loop context");
 
-    let output = Command::new("bash")
-        .current_dir(temp.path())
-        .arg(bash_script_arg(
-            &repo_root.join("scripts/fusion-pretool.sh"),
-        ))
+    let mut cmd = bash_script_command(temp.path(), &repo_root.join("scripts/fusion-pretool.sh"));
+    let output = cmd
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell pretool fallback");
@@ -5300,11 +5366,8 @@ fn shell_pretool_fallback_prints_scheduler_and_agent_batch_summary() {
     )
     .expect("task plan");
 
-    let output = Command::new("bash")
-        .current_dir(temp.path())
-        .arg(bash_script_arg(
-            &repo_root.join("scripts/fusion-pretool.sh"),
-        ))
+    let mut cmd = bash_script_command(temp.path(), &repo_root.join("scripts/fusion-pretool.sh"));
+    let output = cmd
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell pretool fallback");
@@ -5381,11 +5444,8 @@ fn shell_pretool_fallback_prints_agent_handoff_summary() {
     )
     .expect("task plan");
 
-    let output = Command::new("bash")
-        .current_dir(temp.path())
-        .arg(bash_script_arg(
-            &repo_root.join("scripts/fusion-pretool.sh"),
-        ))
+    let mut cmd = bash_script_command(temp.path(), &repo_root.join("scripts/fusion-pretool.sh"));
+    let output = cmd
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell pretool fallback");
@@ -5431,11 +5491,8 @@ fn shell_pretool_fallback_prints_review_gate_guidance() {
     )
     .expect("task plan");
 
-    let output = Command::new("bash")
-        .current_dir(temp.path())
-        .arg(bash_script_arg(
-            &repo_root.join("scripts/fusion-pretool.sh"),
-        ))
+    let mut cmd = bash_script_command(temp.path(), &repo_root.join("scripts/fusion-pretool.sh"));
+    let output = cmd
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell pretool fallback");
@@ -5907,11 +5964,8 @@ fn shell_posttool_fallback_prints_named_completion_and_next_guidance() {
     .expect("task plan");
     fs::write(fusion.join(".progress_snapshot"), "0:2:0:0").expect("snapshot");
 
-    let output = Command::new("bash")
-        .current_dir(temp.path())
-        .arg(bash_script_arg(
-            &repo_root.join("scripts/fusion-posttool.sh"),
-        ))
+    let mut cmd = bash_script_command(temp.path(), &repo_root.join("scripts/fusion-posttool.sh"));
+    let output = cmd
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell posttool fallback");
@@ -5957,11 +6011,8 @@ fn shell_posttool_fallback_prints_review_gate_next_action() {
     .expect("task plan");
     fs::write(fusion.join(".progress_snapshot"), "0:1:1:0").expect("snapshot");
 
-    let output = Command::new("bash")
-        .current_dir(temp.path())
-        .arg(bash_script_arg(
-            &repo_root.join("scripts/fusion-posttool.sh"),
-        ))
+    let mut cmd = bash_script_command(temp.path(), &repo_root.join("scripts/fusion-posttool.sh"));
+    let output = cmd
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell posttool fallback");
@@ -6006,11 +6057,8 @@ fn shell_posttool_fallback_completed_tasks_report_verify_next_action() {
     fs::write(fusion.join("task_plan.md"), "### Task 1: A [COMPLETED]\n").expect("task plan");
     fs::write(fusion.join(".progress_snapshot"), "0:1:0:0").expect("snapshot");
 
-    let output = Command::new("bash")
-        .current_dir(temp.path())
-        .arg(bash_script_arg(
-            &repo_root.join("scripts/fusion-posttool.sh"),
-        ))
+    let mut cmd = bash_script_command(temp.path(), &repo_root.join("scripts/fusion-posttool.sh"));
+    let output = cmd
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell posttool fallback");
@@ -6268,11 +6316,8 @@ fn shell_stop_guard_fallback_blocks_when_pending_tasks_exist() {
     .expect("write sessions");
     fs::write(fusion.join("task_plan.md"), "### Task 1: A [PENDING]\n").expect("task plan");
 
-    let output = Command::new("bash")
-        .current_dir(temp.path())
-        .arg(bash_script_arg(
-            &repo_root.join("scripts/fusion-stop-guard.sh"),
-        ))
+    let mut cmd = bash_script_command(temp.path(), &repo_root.join("scripts/fusion-stop-guard.sh"));
+    let output = cmd
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell stop-guard fallback");
@@ -6330,11 +6375,8 @@ fn shell_stop_guard_fallback_review_gate_requires_reviewer_approval() {
     )
     .expect("task plan");
 
-    let output = Command::new("bash")
-        .current_dir(temp.path())
-        .arg(bash_script_arg(
-            &repo_root.join("scripts/fusion-stop-guard.sh"),
-        ))
+    let mut cmd = bash_script_command(temp.path(), &repo_root.join("scripts/fusion-stop-guard.sh"));
+    let output = cmd
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell stop-guard fallback");
@@ -6394,11 +6436,8 @@ fn shell_stop_guard_fallback_without_tasks_surfaces_decompose_next_action() {
     )
     .expect("write sessions");
 
-    let output = Command::new("bash")
-        .current_dir(temp.path())
-        .arg(bash_script_arg(
-            &repo_root.join("scripts/fusion-stop-guard.sh"),
-        ))
+    let mut cmd = bash_script_command(temp.path(), &repo_root.join("scripts/fusion-stop-guard.sh"));
+    let output = cmd
         .env("FUSION_BRIDGE_DISABLE", "1")
         .output()
         .expect("run shell stop-guard fallback");
