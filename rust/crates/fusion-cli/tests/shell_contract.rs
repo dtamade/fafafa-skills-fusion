@@ -71,6 +71,19 @@ fn create_dir_alias(target: &Path, alias: &Path) {
 }
 
 #[test]
+fn hook_adapter_avoids_nonportable_case_fallthrough_tokens() {
+    let adapter = fs::read_to_string(repo_root().join("scripts/lib/fusion-hook-adapter.sh"))
+        .expect("read fusion-hook-adapter.sh");
+
+    for token in [";;&", ";&"] {
+        assert!(
+            !adapter.lines().any(|line| line.trim() == token),
+            "fusion-hook-adapter.sh must avoid non-portable case token `{token}`"
+        );
+    }
+}
+
+#[test]
 fn ci_cross_platform_smoke_script_help_and_end_to_end() {
     let root = repo_root();
     let script = root.join("scripts/ci-cross-platform-smoke.sh");

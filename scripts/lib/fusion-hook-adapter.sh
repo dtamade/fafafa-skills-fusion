@@ -70,17 +70,17 @@ stop_hook_supports_json_block() {
     case "$mode" in
         json|modern|structured)
             return 0
-            ;;&
+            ;;
         legacy|exit2)
             return 1
-            ;;&
+            ;;
         auto|"")
             return 0
-            ;;&
+            ;;
         *)
             echo "[fusion] unknown FUSION_STOP_HOOK_MODE='$mode', defaulting to structured" >&2
             return 0
-            ;;&
+            ;;
     esac
 }
 
