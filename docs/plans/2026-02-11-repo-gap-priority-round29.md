@@ -6,14 +6,14 @@
 
 **Architecture:** 严格 `RED -> GREEN -> VERIFY`。先写失败测试明确契约，再做最小实现，最后做 targeted + full + rust 门禁收口。
 
-**Tech Stack:** Bash, Python (`pytest`), GitHub Actions YAML。
+**Tech Stack:** Bash, GitHub Actions YAML。
 
 ---
 
 ### Task 1: R29-001 release-audit JSON 增加 `success_rate`/`failed_rate`
 
 **Files:**
-- Modify: `scripts/runtime/tests/test_release_contract_audit_script.py`
+- Modify: `scripts/runtime/tests/test_release_contract_audit_script`
 - Modify: `scripts/release-contract-audit.sh`
 
 **Step 1: Write the failing test**
@@ -25,7 +25,7 @@
   - `failed_rate == 1.0`
 
 **Step 2: Run test to verify it fails**
-- Run: `pytest -q scripts/runtime/tests/test_release_contract_audit_script.py`
+- 测试记录： `scripts/runtime/tests/test_release_contract_audit_script`
 - Expected: FAIL（缺 success_rate/failed_rate）
 
 **Step 3: Write minimal implementation**
@@ -34,7 +34,7 @@
   - `failed_rate = failed_steps_count / steps_executed`（0 步时 0.0）
 
 **Step 4: Run test to verify it passes**
-- Run: `pytest -q scripts/runtime/tests/test_release_contract_audit_script.py`
+- 测试记录： `scripts/runtime/tests/test_release_contract_audit_script`
 - Expected: PASS
 
 ---
@@ -42,8 +42,8 @@
 ### Task 2: R29-002 runner JSON 增加 `success_rate`
 
 **Files:**
-- Modify: `scripts/runtime/tests/test_regression_runner_contract_suite.py`
-- Modify: `scripts/runtime/regression_runner.py`
+- Modify: `scripts/runtime/tests/test_regression_runner_contract_suite`
+- Modify: `scripts/runtime/regression_runner`
 
 **Step 1: Write the failing test**
 - contract suite json 断言：
@@ -52,14 +52,14 @@
   - `success_rate + failed_rate == 1.0`（容差断言）
 
 **Step 2: Run test to verify it fails**
-- Run: `pytest -q scripts/runtime/tests/test_regression_runner_contract_suite.py`
+- 测试记录： `scripts/runtime/tests/test_regression_runner_contract_suite`
 - Expected: FAIL（缺 success_rate）
 
 **Step 3: Write minimal implementation**
 - payload 增加 `success_rate` 聚合字段。
 
 **Step 4: Run test to verify it passes**
-- Run: `pytest -q scripts/runtime/tests/test_regression_runner_contract_suite.py`
+- 测试记录： `scripts/runtime/tests/test_regression_runner_contract_suite`
 - Expected: PASS
 
 ---
@@ -67,7 +67,7 @@
 ### Task 3: R29-003 CI machine schema smoke 同步 rate 字段
 
 **Files:**
-- Modify: `scripts/runtime/tests/test_ci_contract_gates.py`
+- Modify: `scripts/runtime/tests/test_ci_contract_gates`
 - Modify: `.github/workflows/ci-contract-gates.yml`
 
 **Step 1: Write the failing test**
@@ -76,7 +76,7 @@
   - `failed_rate`（release 与 runner 两侧都应出现）
 
 **Step 2: Run test to verify it fails**
-- Run: `pytest -q scripts/runtime/tests/test_ci_contract_gates.py`
+- 测试记录： `scripts/runtime/tests/test_ci_contract_gates`
 - Expected: FAIL（schema smoke required keys 未同步）
 
 **Step 3: Write minimal implementation**
@@ -85,7 +85,7 @@
   - runner-contract: `success_rate`, `failed_rate`
 
 **Step 4: Run test to verify it passes**
-- Run: `pytest -q scripts/runtime/tests/test_ci_contract_gates.py`
+- 测试记录： `scripts/runtime/tests/test_ci_contract_gates`
 - Expected: PASS
 
 ---
@@ -94,7 +94,10 @@
 
 Run:
 - `bash -n scripts/release-contract-audit.sh scripts/fusion-*.sh`
-- `pytest -q scripts/runtime/tests/test_release_contract_audit_script.py scripts/runtime/tests/test_regression_runner_contract_suite.py scripts/runtime/tests/test_ci_contract_gates.py`
-- `pytest -q`
+- 测试记录： `scripts/runtime/tests/test_release_contract_audit_script scripts/runtime/tests/test_regression_runner_contract_suite scripts/runtime/tests/test_ci_contract_gates`
+- 全量验证记录
 - `(cd rust && cargo clippy --workspace --all-targets -- -D warnings)`
 - `(cd rust && cargo fmt --all -- --check)`
+
+> 归档说明：本文保留其历史上下文。当前行为请以 Rust 与 Shell 契约为准。
+

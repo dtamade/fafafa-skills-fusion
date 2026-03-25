@@ -4,16 +4,16 @@
 
 **Goal:** 修复 `fusion-codeagent.sh` 的会话 ID 提取与 resume/fallback 行为，避免错误 session id 导致无谓 fallback；并增加可配置 timeout 以在 `codex` 后端 hang 时触发 fallback，保证自主循环可持续推进。
 
-**Architecture:** 用 `pytest` 端到端脚本测试驱动 `scripts/fusion-codeagent.sh` 行为（session ID 持久化、resume 失败降级策略、timeout->fallback）。实现保持最小改动：优先从 `SESSION_ID:` 标记提取 session；resume 失败时同后端无 resume 重试一次；可选 timeout 通过 `FUSION_CODEAGENT_TIMEOUT_SEC` 启用。
+**Architecture:** 用归档中的端到端测试调用记录来驱动 `scripts/fusion-codeagent.sh` 行为（session ID 持久化、resume 失败降级策略、timeout->fallback）。实现保持最小改动：优先从 `SESSION_ID:` 标记提取 session；resume 失败时同后端无 resume 重试一次；可选 timeout 通过 `FUSION_CODEAGENT_TIMEOUT_SEC` 启用。
 
-**Tech Stack:** Bash, Python unittest (pytest runner).
+**Tech Stack:** Bash.
 
 ---
 
 ### Task 1: 支持 UUID session id 提取与持久化
 
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_codeagent_script.py`
+- Modify: `scripts/runtime/tests/test_fusion_codeagent_script`
 - Modify: `scripts/fusion-codeagent.sh`
 
 **Step 1: Write the failing test**
@@ -22,7 +22,7 @@
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_codeagent_script.py::TestFusionCodeagentScript::test_execute_phase_stores_uuid_session_id`
+测试记录： `scripts/runtime/tests/test_fusion_codeagent_script::TestFusionCodeagentScript::test_execute_phase_stores_uuid_session_id`
 Expected: FAIL（UUID 未被持久化）
 
 **Step 3: Write minimal implementation**
@@ -32,12 +32,12 @@ Expected: FAIL（UUID 未被持久化）
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_codeagent_script.py::TestFusionCodeagentScript::test_execute_phase_stores_uuid_session_id`
+测试记录： `scripts/runtime/tests/test_fusion_codeagent_script::TestFusionCodeagentScript::test_execute_phase_stores_uuid_session_id`
 Expected: PASS
 
 **Step 5: Verify task scope regression**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_codeagent_script.py`
+测试记录： `scripts/runtime/tests/test_fusion_codeagent_script`
 Expected: PASS
 
 ---
@@ -45,7 +45,7 @@ Expected: PASS
 ### Task 2: resume 失败时同后端无 resume 重试一次
 
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_codeagent_script.py`
+- Modify: `scripts/runtime/tests/test_fusion_codeagent_script`
 - Modify: `scripts/fusion-codeagent.sh`
 
 **Step 1: Write the failing test**
@@ -54,7 +54,7 @@ Expected: PASS
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_codeagent_script.py::TestFusionCodeagentScript::test_execute_phase_resume_failure_retries_without_resume`
+测试记录： `scripts/runtime/tests/test_fusion_codeagent_script::TestFusionCodeagentScript::test_execute_phase_resume_failure_retries_without_resume`
 Expected: FAIL（直接 fallback，触发 codex）
 
 **Step 3: Write minimal implementation**
@@ -65,12 +65,12 @@ Expected: FAIL（直接 fallback，触发 codex）
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_codeagent_script.py::TestFusionCodeagentScript::test_execute_phase_resume_failure_retries_without_resume`
+测试记录： `scripts/runtime/tests/test_fusion_codeagent_script::TestFusionCodeagentScript::test_execute_phase_resume_failure_retries_without_resume`
 Expected: PASS
 
 **Step 5: Verify task scope regression**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_codeagent_script.py`
+测试记录： `scripts/runtime/tests/test_fusion_codeagent_script`
 Expected: PASS
 
 ---
@@ -78,7 +78,7 @@ Expected: PASS
 ### Task 3: 增加超时保护以在 backend hang 时触发 fallback
 
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_codeagent_script.py`
+- Modify: `scripts/runtime/tests/test_fusion_codeagent_script`
 - Modify: `scripts/fusion-codeagent.sh`
 
 **Step 1: Write the failing test**
@@ -87,7 +87,7 @@ Expected: PASS
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_codeagent_script.py::TestFusionCodeagentScript::test_timeout_falls_back_to_claude`
+测试记录： `scripts/runtime/tests/test_fusion_codeagent_script::TestFusionCodeagentScript::test_timeout_falls_back_to_claude`
 Expected: FAIL（无 timeout，primary 最终成功，未 fallback）
 
 **Step 3: Write minimal implementation**
@@ -99,12 +99,12 @@ Expected: FAIL（无 timeout，primary 最终成功，未 fallback）
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_codeagent_script.py::TestFusionCodeagentScript::test_timeout_falls_back_to_claude`
+测试记录： `scripts/runtime/tests/test_fusion_codeagent_script::TestFusionCodeagentScript::test_timeout_falls_back_to_claude`
 Expected: PASS
 
 **Step 5: Verify task scope regression**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_codeagent_script.py`
+测试记录： `scripts/runtime/tests/test_fusion_codeagent_script`
 Expected: PASS
 
 ---
@@ -113,11 +113,13 @@ Expected: PASS
 
 Run:
 - `bash -n scripts/*.sh`
-- `pytest -q scripts/runtime/tests/test_fusion_codeagent_script.py`
-- `pytest -q`
+- 测试记录： `scripts/runtime/tests/test_fusion_codeagent_script`
+- 全量验证记录
 - `(cd rust && cargo clippy --workspace --all-targets -- -D warnings)`
 - `(cd rust && cargo fmt --all -- --check)`
 
 Expected:
 - all commands pass with no regressions
 
+
+> 归档说明：本文保留其历史上下文。当前行为请以 Rust 与 Shell 契约为准。

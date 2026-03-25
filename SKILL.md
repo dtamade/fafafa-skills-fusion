@@ -40,8 +40,7 @@ hooks:
 
 # Fusion - 自主工作流
 
-> Hook 配置请使用宿主标准设置文件（如 `.claude/settings.json`），见 `docs/HOOKS_SETUP.md`。
-
+> Hook 配置请使用宿主标准设置文件，见 `docs/HOOKS_SETUP.md`。仓库内的 `.claude/settings.example.json` 只是受版本控制模板；实际 `.claude/settings.json` 与 `.claude/settings.local.json` 属于宿主本地 Hook 配置。若这里描述的 Hook 接线边界或相关仓库/runtime 契约发生变化，请同步更新相关活文档，以及 `rust/crates/fusion-cli/tests/repo_contract.rs` / `rust/crates/fusion-cli/tests/shell_contract.rs`。
 
 ## ⚠️ 执行循环协议 (CRITICAL)
 
@@ -72,7 +71,7 @@ LOOP:
 
 每次工具调用后，执行以下检查：
 
-```python
+```text
 # 伪代码
 def check_and_continue():
     tasks = read(".fusion/task_plan.md")
@@ -93,6 +92,7 @@ def check_and_continue():
 **"给目标，自动执行，只在必要时打扰"**
 
 融合多个优秀方案的精华：
+
 - **Codex** - 规划、复杂分析与审查
 - **Claude** - 执行实现与本地改写
 - **TDD** - 强制测试驱动开发
@@ -108,6 +108,7 @@ def check_and_continue():
 ```
 
 就这么简单。Fusion 会自动：
+
 1. 分析目标和代码库
 2. 拆分为可执行的子任务
 3. 按 TDD 流程逐个实现
@@ -125,6 +126,7 @@ def check_and_continue():
 ```
 
 启动自主工作流。Fusion 会：
+
 - 按阶段与任务类型路由 Codex/Claude（默认：Codex 规划审查，Claude 执行写码）
 - 按依赖关系调度执行
 - 持续写入进度到 `.fusion/progress.md`
@@ -132,14 +134,14 @@ def check_and_continue():
 
 ### 子命令
 
-| 命令 | 描述 |
-|------|------|
-| `/fusion status` | 查看当前任务状态和进度 |
-| `/fusion resume` | 恢复上次中断的任务 |
-| `/fusion pause` | 暂停当前执行 |
-| `/fusion cancel` | 取消当前任务 |
-| `/fusion logs` | 查看详细执行日志 |
-| `/fusion achievements` | 查看成就汇总与排行榜 |
+| 命令                   | 描述                   |
+| ---------------------- | ---------------------- |
+| `/fusion status`       | 查看当前任务状态和进度 |
+| `/fusion resume`       | 恢复上次中断的任务     |
+| `/fusion pause`        | 暂停当前执行           |
+| `/fusion cancel`       | 取消当前任务           |
+| `/fusion logs`         | 查看详细执行日志       |
+| `/fusion achievements` | 查看成就汇总与排行榜   |
 
 ### 选项
 
@@ -203,11 +205,12 @@ def check_and_continue():
 ```yaml
 understand:
   pass_threshold: 7
-  require_confirmation: false   # true: 低分阻塞，等待澄清
+  require_confirmation: false # true: 低分阻塞，等待澄清
   max_questions: 2
 ```
 
 **跳过机制**：
+
 ```bash
 /fusion --force "目标"   # 跳过 UNDERSTAND，直接执行
 /fusion --yolo "目标"    # 同上
@@ -231,14 +234,14 @@ understand:
 
 ## 用户打扰规则
 
-| 场景 | 行为 |
-|------|------|
-| 正常执行 | 静默写入 `.fusion/progress.md` |
-| 阶段完成 | 静默（完全自主模式）|
-| 可恢复错误 | 自动重试/降级 |
-| **需要决策** | 询问用户 |
-| **3次连续失败** | 询问用户 |
-| 最终完成 | 详细汇报 |
+| 场景            | 行为                           |
+| --------------- | ------------------------------ |
+| 正常执行        | 静默写入 `.fusion/progress.md` |
+| 阶段完成        | 静默（完全自主模式）           |
+| 可恢复错误      | 自动重试/降级                  |
+| **需要决策**    | 询问用户                       |
+| **3次连续失败** | 询问用户                       |
+| 最终完成        | 详细汇报                       |
 
 ---
 
@@ -286,6 +289,7 @@ understand:
 ## 进度文件（.fusion）
 
 ```
+
 .fusion/
 ├── task_plan.md
 ├── progress.md
@@ -293,9 +297,10 @@ understand:
 ├── sessions.json
 ├── config.yaml
 ├── events.jsonl
-├── backend_failure_report.json  # 后端阻塞（primary+fallback 失败）时生成
-└── dependency_report.json   # 依赖阻塞时生成
-```
+├── backend_failure_report.json # 后端阻塞（primary+fallback 失败）时生成
+└── dependency_report.json # 依赖阻塞时生成
+
+````
 
 常用查看方式：
 
@@ -303,7 +308,7 @@ understand:
 /fusion status
 cat .fusion/progress.md
 tail -f .fusion/progress.md
-```
+````
 
 ---
 
@@ -311,7 +316,6 @@ tail -f .fusion/progress.md
 
 Fusion 会先自动处理关键依赖，再决定是否阻塞：
 
-- 自动识别 Python：`python3` → `python`
 - 自动定位 `codeagent-wrapper`：
   - `CODEAGENT_WRAPPER_BIN`
   - `PATH`
@@ -345,7 +349,7 @@ backend_routing:
 
 understand:
   pass_threshold: 7
-  require_confirmation: false  # true: 低分阻塞并等待澄清
+  require_confirmation: false # true: 低分阻塞并等待澄清
 
 scheduler:
   enabled: true

@@ -4,22 +4,22 @@
 
 **Goal:** 在保持全仓门禁全绿的前提下，补齐 machine JSON 文档契约缺口，并用 docs freshness 测试建立回归守卫。
 
-**Architecture:** 以 `scripts/runtime/tests/test_docs_freshness.py` 作为文档契约守门测试，先写失败断言，再最小化补全文档（`docs/HOOKS_SETUP.md`、`docs/CLI_CONTRACT_MATRIX.md`、`README.md`、`README.zh-CN.md`）。每个任务独立 RED→GREEN→VERIFY，最后执行 targeted + full + shell + rust 回归。
+**Architecture:** 以 `scripts/runtime/tests/test_docs_freshness` 作为文档契约守门测试，先写失败断言，再最小化补全文档（`docs/HOOKS_SETUP.md`、`docs/CLI_CONTRACT_MATRIX.md`、`README.md`、`README.zh-CN.md`）。每个任务独立 RED→GREEN→VERIFY，最后执行 targeted + full + shell + rust 回归。
 
-**Tech Stack:** Python unittest (pytest runner), Markdown docs, Bash tooling
+**Tech Stack:** Markdown docs, Bash tooling
 
 ---
 
 ### Task 1: HOOKS_SETUP 增加 schema/basis 字段语义说明
 
 **Files:**
-- Modify: `scripts/runtime/tests/test_docs_freshness.py`
+- Modify: `scripts/runtime/tests/test_docs_freshness`
 - Modify: `docs/HOOKS_SETUP.md`
-- Test: `scripts/runtime/tests/test_docs_freshness.py`
+- Test: `scripts/runtime/tests/test_docs_freshness`
 
 **Step 1: Write the failing test**
 
-```python
+```text
 def test_hooks_setup_mentions_machine_schema_and_basis_fields(self):
     content = (REPO_ROOT / "docs" / "HOOKS_SETUP.md").read_text(encoding="utf-8")
     self.assertIn("schema_version", content)
@@ -30,7 +30,7 @@ def test_hooks_setup_mentions_machine_schema_and_basis_fields(self):
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_docs_freshness.py::TestDocsFreshness::test_hooks_setup_mentions_machine_schema_and_basis_fields`
+测试记录： `scripts/runtime/tests/test_docs_freshness::TestDocsFreshness::test_hooks_setup_mentions_machine_schema_and_basis_fields`
 Expected: FAIL (HOOKS_SETUP currently missing these fields)
 
 **Step 3: Write minimal implementation**
@@ -43,7 +43,7 @@ Expected: FAIL (HOOKS_SETUP currently missing these fields)
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_docs_freshness.py::TestDocsFreshness::test_hooks_setup_mentions_machine_schema_and_basis_fields`
+测试记录： `scripts/runtime/tests/test_docs_freshness::TestDocsFreshness::test_hooks_setup_mentions_machine_schema_and_basis_fields`
 Expected: PASS
 
 **Step 5: Checkpoint**
@@ -54,13 +54,13 @@ Expected: `shell-syntax:OK`
 ### Task 2: CLI Contract Matrix 增加 machine required keys 说明
 
 **Files:**
-- Modify: `scripts/runtime/tests/test_docs_freshness.py`
+- Modify: `scripts/runtime/tests/test_docs_freshness`
 - Modify: `docs/CLI_CONTRACT_MATRIX.md`
-- Test: `scripts/runtime/tests/test_docs_freshness.py`
+- Test: `scripts/runtime/tests/test_docs_freshness`
 
 **Step 1: Write the failing test**
 
-```python
+```text
 def test_cli_contract_matrix_has_machine_required_keys_note(self):
     content = CLI_CONTRACT_MATRIX.read_text(encoding="utf-8")
     self.assertIn("Required machine JSON keys", content)
@@ -70,7 +70,7 @@ def test_cli_contract_matrix_has_machine_required_keys_note(self):
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_docs_freshness.py::TestDocsFreshness::test_cli_contract_matrix_has_machine_required_keys_note`
+测试记录： `scripts/runtime/tests/test_docs_freshness::TestDocsFreshness::test_cli_contract_matrix_has_machine_required_keys_note`
 Expected: FAIL (matrix currently has no dedicated required-keys note)
 
 **Step 3: Write minimal implementation**
@@ -81,25 +81,25 @@ Expected: FAIL (matrix currently has no dedicated required-keys note)
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_docs_freshness.py::TestDocsFreshness::test_cli_contract_matrix_has_machine_required_keys_note`
+测试记录： `scripts/runtime/tests/test_docs_freshness::TestDocsFreshness::test_cli_contract_matrix_has_machine_required_keys_note`
 Expected: PASS
 
 **Step 5: Checkpoint**
 
-Run: `pytest -q scripts/runtime/tests/test_docs_freshness.py`
+测试记录： `scripts/runtime/tests/test_docs_freshness`
 Expected: PASS
 
 ### Task 3: README EN/ZH 增补 basis 分母语义说明
 
 **Files:**
-- Modify: `scripts/runtime/tests/test_docs_freshness.py`
+- Modify: `scripts/runtime/tests/test_docs_freshness`
 - Modify: `README.md`
 - Modify: `README.zh-CN.md`
-- Test: `scripts/runtime/tests/test_docs_freshness.py`
+- Test: `scripts/runtime/tests/test_docs_freshness`
 
 **Step 1: Write the failing test**
 
-```python
+```text
 def test_readme_en_zh_explain_basis_denominators(self):
     readme_en = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     readme_zh = (REPO_ROOT / "README.zh-CN.md").read_text(encoding="utf-8")
@@ -111,7 +111,7 @@ def test_readme_en_zh_explain_basis_denominators(self):
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_docs_freshness.py::TestDocsFreshness::test_readme_en_zh_explain_basis_denominators`
+测试记录： `scripts/runtime/tests/test_docs_freshness::TestDocsFreshness::test_readme_en_zh_explain_basis_denominators`
 Expected: FAIL (README EN/ZH currently lack explicit denominator text)
 
 **Step 3: Write minimal implementation**
@@ -123,22 +123,25 @@ Expected: FAIL (README EN/ZH currently lack explicit denominator text)
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_docs_freshness.py::TestDocsFreshness::test_readme_en_zh_explain_basis_denominators`
+测试记录： `scripts/runtime/tests/test_docs_freshness::TestDocsFreshness::test_readme_en_zh_explain_basis_denominators`
 Expected: PASS
 
 **Step 5: Verify task scope**
 
-Run: `pytest -q scripts/runtime/tests/test_docs_freshness.py scripts/runtime/tests/test_release_contract_audit_script.py scripts/runtime/tests/test_regression_runner_contract_suite.py scripts/runtime/tests/test_ci_contract_gates.py`
+测试记录： `scripts/runtime/tests/test_docs_freshness scripts/runtime/tests/test_release_contract_audit_script scripts/runtime/tests/test_regression_runner_contract_suite scripts/runtime/tests/test_ci_contract_gates`
 Expected: PASS
 
 ### Final Verification Bundle
 
 Run:
 - `bash -n scripts/*.sh`
-- `pytest -q scripts/runtime/tests/test_docs_freshness.py scripts/runtime/tests/test_release_contract_audit_script.py scripts/runtime/tests/test_regression_runner_contract_suite.py scripts/runtime/tests/test_ci_contract_gates.py`
-- `pytest -q`
+- 测试记录： `scripts/runtime/tests/test_docs_freshness scripts/runtime/tests/test_release_contract_audit_script scripts/runtime/tests/test_regression_runner_contract_suite scripts/runtime/tests/test_ci_contract_gates`
+- 全量验证记录
 - `(cd rust && cargo clippy --workspace --all-targets -- -D warnings)`
 - `(cd rust && cargo fmt --all -- --check)`
 
 Expected:
 - all commands pass with zero regressions
+
+> 归档说明：本文保留其历史上下文。当前行为请以 Rust 与 Shell 契约为准。
+

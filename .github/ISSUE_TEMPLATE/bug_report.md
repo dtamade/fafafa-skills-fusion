@@ -3,7 +3,7 @@ name: Bug report
 about: Report a bug to help us improve Fusion Skill
 title: "[Bug] "
 labels: bug
-assignees: ''
+assignees: ""
 ---
 
 ## Description
@@ -28,8 +28,10 @@ What actually happened.
 
 - OS:
 - Shell:
-- Python version:
+- `fusion-bridge` version or build source:
+- Reproduces with fresh `.fusion/config.yaml` generated from `templates/config.yaml`:
+- Hook config in use (`.claude/settings.json` / `.claude/settings.local.json` / none):
 
 ## Additional Context
 
-Include relevant logs or snippets (for example from `.fusion/events.jsonl`).
+Include relevant logs or snippets (for example from `.fusion/events.jsonl`). If hook wiring is relevant, note whether the checked-in `.claude/settings.example.json` template was copied into a host-local file before reproduction.

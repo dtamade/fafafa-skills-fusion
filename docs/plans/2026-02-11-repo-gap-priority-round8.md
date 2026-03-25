@@ -6,14 +6,14 @@
 
 **Architecture:** 严格按 `RED -> GREEN -> REFACTOR` 执行。先用失败测试锁定目标行为，再做最小改动；每个任务完成后执行针对性验证，最后做 targeted + full 回归。
 
-**Tech Stack:** Bash, Python `pytest`, Markdown。
+**Tech Stack:** Bash, Markdown。
 
 ---
 
 ### Task 1: R8-001 错误参数时不输出成功横幅
 
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_achievements_script.py`
+- Modify: `scripts/runtime/tests/test_fusion_achievements_script`
 - Modify: `scripts/fusion-achievements.sh`
 
 **Step 1: Write the failing test**
@@ -23,7 +23,7 @@
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_achievements_script.py::TestFusionAchievementsScript::test_rejects_non_numeric_top_value`
+测试记录： `scripts/runtime/tests/test_fusion_achievements_script::TestFusionAchievementsScript::test_rejects_non_numeric_top_value`
 Expected: FAIL（当前错误路径仍输出横幅）。
 
 **Step 3: Write minimal implementation**
@@ -32,7 +32,7 @@ Expected: FAIL（当前错误路径仍输出横幅）。
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_achievements_script.py::TestFusionAchievementsScript::test_rejects_non_numeric_top_value`
+测试记录： `scripts/runtime/tests/test_fusion_achievements_script::TestFusionAchievementsScript::test_rejects_non_numeric_top_value`
 Expected: PASS。
 
 ---
@@ -40,7 +40,7 @@ Expected: PASS。
 ### Task 2: R8-002 支持 `--top=<n>`
 
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_achievements_script.py`
+- Modify: `scripts/runtime/tests/test_fusion_achievements_script`
 - Modify: `scripts/fusion-achievements.sh`
 
 **Step 1: Write the failing test**
@@ -52,7 +52,7 @@ Expected: PASS。
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_achievements_script.py::TestFusionAchievementsScript::test_supports_top_equals_syntax`
+测试记录： `scripts/runtime/tests/test_fusion_achievements_script::TestFusionAchievementsScript::test_supports_top_equals_syntax`
 Expected: FAIL（当前 `Unknown option: --top=1`）。
 
 **Step 3: Write minimal implementation**
@@ -61,7 +61,7 @@ Expected: FAIL（当前 `Unknown option: --top=1`）。
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_achievements_script.py::TestFusionAchievementsScript::test_supports_top_equals_syntax`
+测试记录： `scripts/runtime/tests/test_fusion_achievements_script::TestFusionAchievementsScript::test_supports_top_equals_syntax`
 Expected: PASS。
 
 ---
@@ -69,7 +69,7 @@ Expected: PASS。
 ### Task 3: R8-003 支持 `--root=<path>`
 
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_achievements_script.py`
+- Modify: `scripts/runtime/tests/test_fusion_achievements_script`
 - Modify: `scripts/fusion-achievements.sh`
 
 **Step 1: Write the failing test**
@@ -81,7 +81,7 @@ Expected: PASS。
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_achievements_script.py::TestFusionAchievementsScript::test_supports_root_equals_syntax`
+测试记录： `scripts/runtime/tests/test_fusion_achievements_script::TestFusionAchievementsScript::test_supports_root_equals_syntax`
 Expected: FAIL（当前 `Unknown option: --root=<path>`）。
 
 **Step 3: Write minimal implementation**
@@ -90,7 +90,7 @@ Expected: FAIL（当前 `Unknown option: --root=<path>`）。
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_achievements_script.py::TestFusionAchievementsScript::test_supports_root_equals_syntax`
+测试记录： `scripts/runtime/tests/test_fusion_achievements_script::TestFusionAchievementsScript::test_supports_root_equals_syntax`
 Expected: PASS。
 
 ---
@@ -99,6 +99,9 @@ Expected: PASS。
 
 Run:
 - `bash -n scripts/fusion-achievements.sh`
-- `pytest -q scripts/runtime/tests/test_fusion_achievements_script.py`
-- `pytest -q scripts/runtime/tests/test_fusion_achievements_script.py scripts/runtime/tests/test_fusion_start_script.py scripts/runtime/tests/test_loop_guardian_script.py scripts/runtime/tests/test_fusion_control_script_validation.py scripts/runtime/tests/test_docs_freshness.py scripts/runtime/tests/test_fusion_hook_doctor_script.py scripts/runtime/tests/test_fusion_status_script.py`
-- `pytest -q`
+- 测试记录： `scripts/runtime/tests/test_fusion_achievements_script`
+- 测试记录： `scripts/runtime/tests/test_fusion_achievements_script scripts/runtime/tests/test_fusion_start_script scripts/runtime/tests/test_loop_guardian_script scripts/runtime/tests/test_fusion_control_script_validation scripts/runtime/tests/test_docs_freshness scripts/runtime/tests/test_fusion_hook_doctor_script scripts/runtime/tests/test_fusion_status_script`
+- 全量验证记录
+
+> 归档说明：本文保留其历史上下文。当前行为请以 Rust 与 Shell 契约为准。
+

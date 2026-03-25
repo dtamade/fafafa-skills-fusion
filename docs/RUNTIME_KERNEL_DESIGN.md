@@ -1,8 +1,10 @@
 # Fusion Runtime Kernel v2.1.0 设计文档
 
-> 状态: 设计阶段
+> 状态: 设计阶段（历史设计稿）
 > 版本: v2.1.0
 > 目标: 把 8 阶段从 Prompt 约束升级为可执行 FSM
+> 说明：本文描述的是历史 runtime kernel 的设计基线，不代表当前控制面入口都仍由该实现承担；当前控制面与 hook 契约请以 Rust bridge 和实时脚本行为为准。
+> 现状补充：仓库中的旧 reference helper 已移除。下文保留的 `_FusionKernel`、`_dispatch()`、`_load_state()` 等符号仅用于说明当时的历史设计草案，不对应当前仓库中的可执行实现或测试夹具。
 
 ## 1. 架构概览
 
@@ -22,8 +24,8 @@
 │  └─────────────┘                    │ events.jsonl    │  │
 │                                     └─────────────────┘  │
 ├─────────────────────────────────────────────────────────┤
-│                    compat_v2.py                          │
-│              (v2 Shell 脚本适配层)                        │
+│     [historical] legacy compat adapter (removed from repo)│
+│   (former legacy parity/reference layer for hook path)   │
 └─────────────────────────────────────────────────────────┘
          ▲                    ▲                    ▲
          │                    │                    │
@@ -33,11 +35,11 @@
     └─────────┘         └─────────┘         └─────────┘
 ```
 
-## 2. 状态机定义 (state_machine.py)
+## 2. 状态机定义（历史设计草案）
 
 ### 2.1 状态枚举
 
-```python
+```text
 from enum import Enum, auto
 
 class State(Enum):
@@ -62,7 +64,9 @@ class State(Enum):
 
 ### 2.2 事件枚举
 
-```python
+> 历史口径说明：本小节展示的是 v2.1.0 设计草案里的事件全集。相关 legacy reference helper 已从仓库删除；未实际使用的历史事件面（如 `UNDERSTAND_DONE`、`TIMEOUT`、`LOOP_DETECTED`）也不属于当前 live/runtime 契约。
+
+```text
 class Event(Enum):
     """触发状态转移的事件"""
     # 用户操作
@@ -91,7 +95,7 @@ class Event(Enum):
 
 ### 2.3 转移规则
 
-```python
+```text
 @dataclass
 class Transition:
     """状态转移规则"""
@@ -131,7 +135,7 @@ TRANSITIONS: List[Transition] = [
 
 ### 2.4 守卫条件示例
 
-```python
+```text
 def guard_can_commit() -> bool:
     """检查是否可以提交"""
     # 所有任务完成
@@ -144,118 +148,114 @@ def guard_has_pending_tasks() -> bool:
     return get_pending_task_count() > 0
 ```
 
-## 3. 内核执行器 (kernel.py)
+## 3. 内核执行器（历史设计草案）
+
+> 现状注记：本节保留设计/参考用途。对应的 legacy helper 已从仓库移除，不通过 `runtime` 包导出，也不是公开 CLI/API。
+> 下方代码块只用于解释结构，符号名已对齐当前仓库私有命名，避免与历史公开草案混淆。
 
 ### 3.1 类定义
 
-```python
-class FusionKernel:
+```text
+class _FusionKernel:
     """Fusion 运行时内核"""
 
     def __init__(
         self,
         fusion_dir: str = ".fusion",
-        compat_mode: bool = True
     ):
         self.fusion_dir = fusion_dir
-        self.compat_mode = compat_mode
-        self.state_machine = StateMachine()
-        self.session_store = SessionStore(fusion_dir)
-        self.event_bus = EventBus()
+        self._state_machine = StateMachine()
+        self._persistence = SessionStore(fusion_dir)
+        self._event_bus = EventBus()
         self._current_state: State = State.IDLE
 
-    @property
-    def current_state(self) -> State:
-        """当前状态"""
-        return self._current_state
-
-    def dispatch(self, event: Event, payload: dict = None) -> bool:
+    def _dispatch(self, event: Event, payload: dict = None) -> _TransitionResult:
         """
         派发事件，触发状态转移
 
         Returns:
-            bool: 转移是否成功
+            _TransitionResult: 转移结果
         """
         pass
 
-    def can_transition(self, event: Event) -> bool:
+    def _can_transition(self, event: Event) -> bool:
         """检查是否可以进行转移"""
         pass
 
-    def get_valid_events(self) -> List[Event]:
+    def _get_valid_events(self) -> List[Event]:
         """获取当前状态可接受的事件列表"""
         pass
 
-    def load_state(self) -> State:
+    def _load_state(self) -> State:
         """从 sessions.json 加载状态"""
         pass
 
-    def save_state(self) -> None:
-        """保存状态到 sessions.json"""
+    def _sync_runtime_snapshot(self) -> None:
+        """同步状态到 sessions.json"""
         pass
 ```
 
 ### 3.2 核心算法
 
-```python
-def dispatch(self, event: Event, payload: dict = None) -> bool:
+```text
+def _dispatch(self, event: Event, payload: dict = None) -> _TransitionResult:
     """派发事件，触发状态转移"""
 
     # 1. 查找匹配的转移规则
-    transition = self.state_machine.find_transition(
+    transition = self._state_machine.find_transition(
         self._current_state, event
     )
 
     if transition is None:
-        self.event_bus.emit("invalid_event", {
+        self._event_bus.emit("invalid_event", {
             "state": self._current_state,
             "event": event
         })
-        return False
+        return _TransitionResult(success=False, ...)
 
     # 2. 检查守卫条件
     if transition.guard and not transition.guard():
-        self.event_bus.emit("guard_failed", {
+        self._event_bus.emit("guard_failed", {
             "transition": transition
         })
-        return False
+        return _TransitionResult(success=False, ...)
 
     # 3. 记录事件 (事件溯源)
-    event_id = self.session_store.append_event({
-        "type": event.name,
-        "from_state": self._current_state.name,
-        "to_state": transition.to_state.name,
-        "payload": payload,
-        "timestamp": time.time()
-    })
+    stored = self._append_runtime_event(
+        event_type=event.name,
+        from_state=self._current_state.name,
+        to_state=transition.to_state.name,
+        payload=payload,
+    )
+    event_id = stored.id if stored else None
 
     # 4. 执行转移动作 (如果有)
     if transition.action:
         try:
             transition.action()
         except Exception as e:
-            self.dispatch(Event.ERROR_OCCURRED, {"error": str(e)})
-            return False
+            self._dispatch(Event.ERROR_OCCURRED, {"error": str(e)})
+            return _TransitionResult(success=False, ...)
 
     # 5. 更新状态
     old_state = self._current_state
     self._current_state = transition.to_state
 
     # 6. 持久化状态
-    self.save_state()
+    self._sync_runtime_snapshot(self._current_state)
 
     # 7. 发布状态变更事件
-    self.event_bus.emit("state_changed", {
+    self._event_bus.emit("state_changed", {
         "from": old_state,
         "to": self._current_state,
         "event": event,
         "event_id": event_id
     })
 
-    return True
+    return _TransitionResult(success=True, event_id=event_id, ...)
 ```
 
-## 4. 事件溯源存储 (session_store.py)
+## 4. 事件溯源存储（历史设计草案）
 
 ### 4.1 事件格式
 
@@ -285,7 +285,7 @@ def dispatch(self, event: Event, payload: dict = None) -> bool:
 
 ### 4.3 幂等性保证
 
-```python
+```text
 def append_event(self, event: dict, idempotency_key: str = None) -> str:
     """追加事件，支持幂等重试"""
 
@@ -321,9 +321,11 @@ def append_event(self, event: dict, idempotency_key: str = None) -> str:
 }
 ```
 
-### 5.2 Shell 脚本适配 (compat_v2.py)
+### 5.2 历史对照适配层（历史设计项，legacy compat adapter 已移除）
 
-```python
+> 下述片段仅保留为历史思路示例。仓库中已不存在该适配层，也不存在任何面向 hook live path 的旧适配 API。
+
+```text
 def adapt_stop_guard_call(context: dict) -> dict:
     """
     将 fusion-stop-guard.sh 的调用适配为 Kernel 事件
@@ -334,18 +336,18 @@ def adapt_stop_guard_call(context: dict) -> dict:
     Returns:
         dict: 处理结果
     """
-    kernel = FusionKernel(compat_mode=True)
-    kernel.load_state()
+    kernel = _FusionKernel()
+    kernel._load_state()
 
     # 根据上下文决定事件
     if context.get("task_completed"):
-        kernel.dispatch(Event.TASK_DONE, context)
+        kernel._dispatch(Event.TASK_DONE, context)
     elif context.get("all_tasks_done"):
-        kernel.dispatch(Event.ALL_TASKS_DONE)
+        kernel._dispatch(Event.ALL_TASKS_DONE)
 
     return {
-        "state": kernel.current_state.name,
-        "should_continue": kernel.current_state == State.EXECUTE
+        "state": kernel._current_state.name,
+        "should_continue": kernel._current_state == State.EXECUTE
     }
 ```
 
@@ -353,8 +355,8 @@ def adapt_stop_guard_call(context: dict) -> dict:
 
 ### 6.1 状态机测试
 
-```python
-class TestStateMachine(unittest.TestCase):
+```text
+class TestStateMachine(HistoricalTestCase):
 
     def test_valid_transitions(self):
         """测试有效的状态转移"""
@@ -375,14 +377,14 @@ class TestStateMachine(unittest.TestCase):
 
 ### 6.2 内核测试
 
-```python
-class TestKernel(unittest.TestCase):
+```text
+class TestKernel(HistoricalTestCase):
 
     def test_full_workflow(self):
         """测试完整工作流"""
-        kernel = FusionKernel()
-        assert kernel.dispatch(Event.START)
-        assert kernel.current_state == State.INITIALIZE
+        kernel = _FusionKernel()
+        assert kernel._dispatch(Event.START).success
+        assert kernel._current_state == State.INITIALIZE
         # ...
 
     def test_resume_from_crash(self):
@@ -399,10 +401,12 @@ class TestKernel(unittest.TestCase):
 
 ## 7. 配置扩展 (config.yaml)
 
+> 历史口径说明：下面这段 `runtime.enabled` / `runtime.compat_mode` 配置块用于保留当时设计假设，不是当前主控制面契约定义。当前 live 行为请以 [docs/HOOKS_SETUP.md](./HOOKS_SETUP.md) 和 Rust bridge 实现为准。
+
 ```yaml
 runtime:
-  enabled: false          # 是否启用新内核 (默认关闭)
-  compat_mode: true       # v2 兼容模式
+  enabled: false          # 是否启用当时设计中的新内核 (历史默认)
+  compat_mode: true       # v2 兼容模式（历史设计口径）
   event_store:
     max_events: 1000      # 最大事件数
     retention_days: 7     # 事件保留天数
@@ -420,13 +424,13 @@ runtime:
 - [ ] 单元测试框架
 
 ### Week 2
-- [ ] SessionStore 实现
+- [ ] 私有 SessionStore 实现
 - [ ] EventBus 实现
 - [ ] Kernel 核心逻辑
 - [ ] 事件溯源测试
 
 ### Week 3
-- [ ] compat_v2 适配层
+- [ ] 历史兼容适配层（历史项；仓库现状已删除）
 - [ ] Shell 脚本改造
 - [ ] 兼容性测试
 

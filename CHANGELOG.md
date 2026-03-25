@@ -4,7 +4,64 @@ All notable changes to Fusion Skill will be documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
 
+> Repo convergence cleanup: Rust-first control plane, thinner shell layer, stricter repository/runtime contracts.
+
+### Added
+
+- **Repository hygiene docs**
+  - `docs/REPO_HYGIENE.md`
+  - `docs/REPO_CONVERGENCE_SUMMARY_2026-03.md`
+- **Rust module splits for oversized control-plane files**
+  - `bootstrap_config.rs`
+  - `catchup_render.rs`
+  - `catchup_session.rs`
+  - `catchup_taskplan.rs`
+  - `posttool_progress.rs`
+  - `posttool_runtime.rs`
+  - `render_status.rs`
+  - `render_taskplan.rs`
+  - `render_tasks.rs`
+  - `runner_backend.rs`
+  - `runner_control.rs`
+  - `runner_route.rs`
+  - `safe_backlog_core.rs`
+  - `safe_backlog_support.rs`
+  - `status_artifacts.rs`
+  - `status_owner.rs`
+  - `status_reports.rs`
+  - `status_runtime.rs`
+  - `achievements.rs`
+
+### Changed
+
+- **Hook path contract unified**
+  - Project hook wiring now standardizes on `bash "${CLAUDE_PROJECT_DIR:-.}/scripts/<hook>.sh"`
+  - Older `${CLAUDE_PROJECT_DIR}` and bare `bash scripts/...` forms are now treated as outdated wiring
+- **Implementation hierarchy clarified**
+  - Rust / `fusion-bridge` is documented and enforced as the main control plane
+  - Shell remains a thin wrapper and hook entry layer
+  - old runtime/reference paths have been removed from the repository and are no longer treated as a peer main implementation
+- **Repository runtime artifact contract tightened**
+  - Live mutable workflow state is documented as `.fusion/` only
+  - Checked-in seeds remain in `templates/`
+  - Generated `.fusion/config.yaml` is workspace state initialized from the checked-in `templates/config.yaml` baseline
+  - Checked-in `.claude/settings.example.json` remains the hook template, while `.claude/settings.json` and `.claude/settings.local.json` stay host-local hook configuration
+  - Illustrative layouts are documented under `examples/`
+  - Root-level runtime artifacts are treated as non-canonical
+- **Release-oriented verification aligned**
+  - Rust README and maintainer guidance now consistently use `cargo test --release`
+  - CI gate documentation is aligned with the existing release-oriented workflow
+- **Large Rust orchestrators reduced**
+  - `render.rs`, `posttool.rs`, `bootstrap.rs`, `safe_backlog.rs`, `catchup.rs`, and `status_render.rs` now delegate to smaller focused modules while preserving call sites and CLI behavior
+
+### Verification
+
+- Rust release contract checks:
+  - `cd rust && cargo test --release -p fusion-cli --test repo_contract`
+  - `cd rust && cargo test --release -p fusion-cli --test shell_contract`
+  - `cd rust && cargo test --release -p fusion-cli --test cli_smoke`
 
 ## [v2.6.3] - 2026-02-10
 
@@ -45,13 +102,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   - `rust/README.md`
   - `docs/RUST_FUSION_BRIDGE_ROADMAP.md`
 - `.gitignore` now excludes `rust/target/`
-- Hook shell scripts now support `runtime.engine: rust` with automatic Python/Shell fallback
+- Hook shell scripts now support `runtime.engine: rust` with automatic Shell fallback
 
 ### Verification
 
 - Rust tests: `cd rust && cargo test` -> passed
-- Existing runtime tests: `pytest -q` -> `317 passed`
-
+- Existing runtime tests from the archived runner stack: `317 passed`
 
 ## [v2.6.2] - 2026-02-10
 
@@ -86,12 +142,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ### Added
 
 - **虚拟监督官 advisory 模式（增补式）**
-  - 新增模块：`scripts/runtime/supervisor.py`
+  - 新增模块：`scripts/runtime/supervisor`
   - 默认关闭，开启后仅输出建议，不接管主流程
 - **compat_v2 监督建议事件**
   - 新增 `SUPERVISOR_ADVISORY` 事件写入 `.fusion/events.jsonl`
 - **配置与测试扩展**
-  - `scripts/runtime/config.py` 增加 supervisor 配置项
+  - `scripts/runtime/config` 增加 supervisor 配置项
   - 新增/更新测试覆盖 supervisor + compat + config
 
 ### Verification
@@ -106,11 +162,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
-- **统一配置加载器**: `scripts/runtime/config.py`
+- **统一配置加载器**: `scripts/runtime/config`
   - 统一读取 `.fusion/config.yaml`
-  - 支持 PyYAML 与轻量 fallback 解析
+  - 支持 YAML parser 与轻量 fallback 解析
 - **Safe Backlog 托底系统（防停摆）**
-  - 新模块：`scripts/runtime/safe_backlog.py`
+  - 新模块：`scripts/runtime/safe_backlog`
   - 支持 `quality/documentation/optimization` 三类低风险任务自动发现
   - 任务注入写入 `task_plan.md`，并打上 `[SAFE_BACKLOG]`
   - 状态持久化到 `.fusion/safe_backlog.json`
@@ -124,28 +180,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   - 冷却参数：`backoff_base_rounds/backoff_max_rounds/backoff_jitter`
   - 强制探测：`backoff_force_probe_rounds`
   - 真实进展时自动复位 backoff
-- **UNDERSTAND 最小执行器**: `scripts/runtime/understand.py`
+- **UNDERSTAND 最小执行器**: `scripts/runtime/understand`
   - 启动后自动评分、上下文扫描、写入 `findings.md`
   - 自动派发 `UNDERSTAND_DONE` 推进到 `INITIALIZE`
 - **codeagent-wrapper 桥接脚本**: `scripts/fusion-codeagent.sh`
   - 支持主后端调用、失败回退、会话 ID 落盘
   - 区分 `codex_session` / `claude_session`
 - **虚拟监督官（增补式 advisory）**
-  - 新模块：`scripts/runtime/supervisor.py`
+  - 新模块：`scripts/runtime/supervisor`
   - 默认关闭，开启后仅输出建议，不直接改任务状态
   - 事件写入 `events.jsonl`：`SUPERVISOR_ADVISORY`
 
 - **脚本级回归测试**
-  - `scripts/runtime/tests/test_fusion_codeagent_script.py`
-  - `scripts/runtime/tests/test_fusion_status_script.py`
-  - `scripts/runtime/tests/test_understand.py`
-  - `scripts/runtime/tests/test_config_loader.py`
+  - `scripts/runtime/tests/test_fusion_codeagent_script`
+  - `scripts/runtime/tests/test_fusion_status_script`
+  - `scripts/runtime/tests/test_understand`
+  - `scripts/runtime/tests/test_config_loader`
 
 ### Changed
 
 - **Hook Runtime 路径修复**
   - `fusion-pretool.sh` / `fusion-posttool.sh` / `fusion-stop-guard.sh`
-  - 统一注入 `PYTHONPATH=$SCRIPT_DIR`，避免从外部 cwd 调用时模块不可达
+  - 统一注入 `LEGACY_RUNTIME_PATH=$SCRIPT_DIR`，避免从外部 cwd 调用时模块不可达
 - **Kernel 自动调度器接线**
   - `create_kernel()` 自动读取 scheduler/budget/backend 配置并初始化
   - `init_scheduler()` 支持 `default_backend`
@@ -171,17 +227,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 ### Added
 
 - **DAG 任务图编译器**: 从 task_plan.md 解析依赖关系，Kahn 拓扑排序产出并行批次
-  - `scripts/runtime/task_graph.py`
+  - `scripts/runtime/task_graph`
   - 支持循环检测、悬空依赖验证、重复依赖去重
 - **文件冲突检测器**: writeset 交集检测，贪心分区产出无冲突子集
-  - `scripts/runtime/conflict_detector.py`
+  - `scripts/runtime/conflict_detector`
 - **Token/时延预算管理**: 全局预算追踪、超预算检测、降级建议
-  - `scripts/runtime/budget_manager.py`
+  - `scripts/runtime/budget_manager`
 - **模型路由**: 基于任务类型和预算状态的后端选择 (codex/claude)
-  - `scripts/runtime/router.py`
+  - `scripts/runtime/router`
   - 路由优先级: 超预算 → 用户指定 → 预算警告 → 类型规则
 - **并行调度器**: 综合 DAG/冲突/预算/路由的批次决策中心
-  - `scripts/runtime/scheduler.py`
+  - `scripts/runtime/scheduler`
   - 决策管道: DAG ready → 冲突过滤 → 预算检查 → 并行度限制 → 模型路由
   - `scheduler.enabled=false` 退化为 v2.1.0 串行行为
 - **Kernel 调度器集成**: 可选接入 Scheduler 的 EXECUTE 循环
@@ -189,17 +245,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
   - 调度器状态同步到 `sessions.json` `_runtime.scheduler`
 - **compat_v2 批次感知**: pretool 输出批次/并行信息，posttool 感知批次完成
 - **并行模拟验收**: 50 个随机 DAG 工作流的端到端模拟
-  - `scripts/runtime/bench_parallel_sim.py`
+  - `scripts/runtime/bench_parallel_sim`
 
 ### Changed
 
 - `StateMachineContext`: 新增 `scheduler_enabled`, `current_batch_id`, `parallel_tasks`, `total_batches` 字段
-- `kernel.py`: 新增可选 Scheduler 集成方法，不影响原有 `dispatch()` 路径
-- `compat_v2.py`: pretool/posttool 扩展显示调度器批次信息
-- `__init__.py`: 导出所有 Phase 2 模块
+- `kernel`: 新增可选 Scheduler 集成方法，不影响原有 `dispatch()` 路径
+- `compat_v2`: pretool/posttool 扩展显示调度器批次信息
+- `__init__`: 导出所有 Phase 2 模块
 - `templates/config.yaml`: 新增 `scheduler` 和 `budget` 配置段
-- `regression_runner.py`: 扩展至 60 场景 (Phase 1: 35 + Phase 2: 25)
-- `bench_hook_latency.py`: 新增 Scheduler 决策延迟基准
+- `regression_runner`: 扩展至 60 场景 (Phase 1: 35 + Phase 2: 25)
+- `bench_hook_latency`: 新增 Scheduler 决策延迟基准
 
 ### Performance
 
@@ -210,28 +266,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Acceptance Metrics
 
-| 指标 | 实际 | 目标 |
-|------|------|------|
-| DAG 依赖违规数 | 0 | = 0 |
-| 中位加速比 | 2.00x | ≥ 1.4x |
-| 冲突回滚率 | 4.8% | ≤ 5% |
-| Token 超支率 | 6.0% | ≤ 10% |
-| 硬上限突破 | 0 | = 0 |
-| 调度决策 p95 | 0.09ms | < 200ms |
-| v2.1.0 回归 | 139/139 | 全部通过 |
+| 指标           | 实际    | 目标     |
+| -------------- | ------- | -------- |
+| DAG 依赖违规数 | 0       | = 0      |
+| 中位加速比     | 2.00x   | ≥ 1.4x   |
+| 冲突回滚率     | 4.8%    | ≤ 5%     |
+| Token 超支率   | 6.0%    | ≤ 10%    |
+| 硬上限突破     | 0       | = 0      |
+| 调度决策 p95   | 0.09ms  | < 200ms  |
+| v2.1.0 回归    | 139/139 | 全部通过 |
 
 ### Test Coverage
 
-| 组件 | 测试数 | 通过率 |
-|------|--------|--------|
-| FSM + Kernel (v2.1.0) | 139 | 100% |
-| DAG 任务图 (Week 5) | 39 | 100% |
-| 冲突检测 (Week 5) | 15 | 100% |
-| 预算管理 (Week 6) | 24 | 100% |
-| 模型路由 (Week 6) | 12 | 100% |
-| 调度器 (Week 6) | 16 | 100% |
-| 调度器集成 (Week 7) | 23 | 100% |
-| **Total** | **268** | **100%** |
+| 组件                  | 测试数  | 通过率   |
+| --------------------- | ------- | -------- |
+| FSM + Kernel (v2.1.0) | 139     | 100%     |
+| DAG 任务图 (Week 5)   | 39      | 100%     |
+| 冲突检测 (Week 5)     | 15      | 100%     |
+| 预算管理 (Week 6)     | 24      | 100%     |
+| 模型路由 (Week 6)     | 12      | 100%     |
+| 调度器 (Week 6)       | 16      | 100%     |
+| 调度器集成 (Week 7)   | 23      | 100%     |
+| **Total**             | **268** | **100%** |
 
 回归: 60/60 场景 (100%) | 恢复可靠性: 20/20 (100%)
 
@@ -249,3 +305,5 @@ Format follows [Keep a Changelog](https://keepachangelog.com/).
 - Loop Guardian 循环检测
 - 会话恢复 (fusion-resume.sh)
 - 跨平台兼容 (Linux/macOS/Windows)
+
+> Archive note: this file keeps its historical context. For current behavior, use the Rust and shell contracts.

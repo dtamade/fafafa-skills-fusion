@@ -3,7 +3,7 @@
 **审查日期**: 2026-02-14
 **审查人**: reviewer
 **修改范围**: scripts/fusion-pretool.sh, scripts/fusion-posttool.sh
-**测试文件**: scripts/runtime/tests/test_hook_stdin_handling.py
+**测试文件**: scripts/runtime/tests/test_hook_stdin_handling
 
 ---
 
@@ -30,7 +30,7 @@ pretool 和 posttool hook 没有读取 stdin 输入，违反了 Claude Code 的 
 - **Runtime adapter 优先**: 保持了 runtime adapter 的优先级
 
 ### ✅ 测试覆盖
-新增测试文件 `test_hook_stdin_handling.py` 包含 5 个测试用例：
+新增测试文件 `test_hook_stdin_handling` 包含 5 个测试用例：
 1. `test_pretool_consumes_stdin` - 验证 pretool 正确读取 stdin ✅
 2. `test_posttool_consumes_stdin` - 验证 posttool 正确读取 stdin ✅
 3. `test_stop_guard_consumes_stdin` - 验证 stop-guard 正确读取 stdin ✅
@@ -105,3 +105,6 @@ pretool 和 posttool hook 没有读取 stdin 输入，违反了 Claude Code 的 
 
 **审查人签名**: reviewer
 **审查状态**: APPROVED ✅
+
+> Archive note: this review keeps its historical context. For current behavior, use the Rust and shell contracts.
+

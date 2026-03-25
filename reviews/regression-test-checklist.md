@@ -3,7 +3,7 @@
 **测试日期**: 2026-02-14
 **测试人**: reviewer
 **修改版本**: hook-stdin-fix
-**测试环境**: Linux 6.12.63, Python 3.13.5, pytest 9.0.2
+**测试环境**: Linux 6.12.63，旧 runtime 快照 3.13.5，归档记录中的测试工具版本 9.0.2
 
 ---
 
@@ -12,7 +12,7 @@
 ### 修改文件
 - `scripts/fusion-pretool.sh` - 添加 stdin 读取
 - `scripts/fusion-posttool.sh` - 添加 stdin 读取
-- `scripts/runtime/tests/test_hook_stdin_handling.py` - 新增测试
+- `scripts/runtime/tests/test_hook_stdin_handling` - 新增测试
 
 ### 影响范围
 - PreToolUse hook 执行流程
@@ -23,7 +23,7 @@
 
 ## 单元测试结果
 
-### 新增测试 (test_hook_stdin_handling.py)
+### 新增测试 (test_hook_stdin_handling)
 ```
 ✅ test_pretool_consumes_stdin - PASSED
 ✅ test_posttool_consumes_stdin - PASSED
@@ -37,11 +37,11 @@
 
 ### 现有 Hook 测试套件
 ```
-✅ test_hook_adapter.py - 12/12 通过
-✅ test_hook_shell_runtime_path.py - 10/10 通过
-✅ test_fusion_hook_doctor_script.py - 8/8 通过
-✅ test_fusion_hook_selfcheck_script.py - 3/3 通过
-⚠️ test_fusion_start_script.py - 9/10 通过 (1 失败)
+✅ test_hook_adapter - 12/12 通过
+✅ test_hook_shell_runtime_path - 10/10 通过
+✅ test_fusion_hook_doctor_script - 8/8 通过
+✅ test_fusion_hook_selfcheck_script - 3/3 通过
+⚠️ test_fusion_start_script - 9/10 通过 (1 失败)
 
 总计: 62/63 通过 (98.4%)
 执行时间: 12.37s
@@ -65,7 +65,7 @@
 - [x] hook 输出正确显示在 Claude 上下文中
 
 ### Runtime Adapter 兼容性
-- [x] Python compat_v2 模式正常工作
+- [x] 历史 compat_v2 模式正常工作
 - [x] Rust bridge 模式正常工作（如果可用）
 - [x] Shell fallback 模式正常工作
 - [x] Runtime adapter 优先级正确
@@ -176,3 +176,5 @@ stdin 输入大小: <1KB (典型)
 
 **测试人签名**: reviewer
 **测试状态**: PASSED ✅
+
+> Archive note: this review keeps its historical context. For current behavior, use the Rust and shell contracts.

@@ -6,14 +6,14 @@
 
 **Architecture:** 严格 `RED -> GREEN -> REFACTOR`。新增失败测试先锁定行为，再做最小改动，最后执行 targeted + full 回归。
 
-**Tech Stack:** Bash, Python `pytest`, Markdown。
+**Tech Stack:** Bash, Markdown。
 
 ---
 
 ### Task 1: R17-001/R17-002 status JSON 参数契约
 
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_status_script.py`
+- Modify: `scripts/runtime/tests/test_fusion_status_script`
 
 **Step 1: RED**
 - 新增测试：
@@ -32,7 +32,7 @@
 ### Task 2: R17-003 hook-doctor fix 失败路径
 
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_hook_doctor_script.py`
+- Modify: `scripts/runtime/tests/test_fusion_hook_doctor_script`
 
 **Step 1: RED**
 - 新增 `test_json_mode_fix_failure_reports_warn_and_fixed_false`。
@@ -49,7 +49,7 @@
 ### Task 3: R17-004 logs 多参数边界
 
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_control_script_validation.py`
+- Modify: `scripts/runtime/tests/test_fusion_control_script_validation`
 
 **Step 1: RED**
 - 新增 `test_logs_rejects_too_many_arguments`。
@@ -67,6 +67,9 @@
 
 Run:
 - `bash -n scripts/fusion-status.sh scripts/fusion-hook-doctor.sh scripts/fusion-logs.sh`
-- `pytest -q scripts/runtime/tests/test_fusion_status_script.py scripts/runtime/tests/test_fusion_hook_doctor_script.py scripts/runtime/tests/test_fusion_control_script_validation.py`
-- `pytest -q scripts/runtime/tests/test_fusion_status_script.py scripts/runtime/tests/test_fusion_achievements_script.py scripts/runtime/tests/test_fusion_control_script_validation.py scripts/runtime/tests/test_fusion_codeagent_script.py scripts/runtime/tests/test_fusion_hook_doctor_script.py scripts/runtime/tests/test_fusion_start_script.py scripts/runtime/tests/test_loop_guardian_script.py scripts/runtime/tests/test_fusion_stop_guard_script.py scripts/runtime/tests/test_hook_shell_runtime_path.py scripts/runtime/tests/test_docs_freshness.py`
-- `pytest -q`
+- 测试记录： `scripts/runtime/tests/test_fusion_status_script scripts/runtime/tests/test_fusion_hook_doctor_script scripts/runtime/tests/test_fusion_control_script_validation`
+- 测试记录： `scripts/runtime/tests/test_fusion_status_script scripts/runtime/tests/test_fusion_achievements_script scripts/runtime/tests/test_fusion_control_script_validation scripts/runtime/tests/test_fusion_codeagent_script scripts/runtime/tests/test_fusion_hook_doctor_script scripts/runtime/tests/test_fusion_start_script scripts/runtime/tests/test_loop_guardian_script scripts/runtime/tests/test_fusion_stop_guard_script scripts/runtime/tests/test_hook_shell_runtime_path scripts/runtime/tests/test_docs_freshness`
+- 全量验证记录
+
+> 归档说明：本文保留其历史上下文。当前行为请以 Rust 与 Shell 契约为准。
+

@@ -16,11 +16,12 @@ clap.workspace = true
 rand.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serde_yaml.workspace = true
 sha1.workspace = true
+tempfile.workspace = true
 fusion-provider = { path = "../fusion-provider" }
 fusion-runtime-io = { path = "../fusion-runtime-io" }
 
 [dev-dependencies]
 assert_cmd = "2.0"
 predicates = "3.1"
-tempfile.workspace = true

@@ -1,72 +1,69 @@
 #!/bin/bash
-# fusion-init.sh - Initialize .fusion directory for a project
+# fusion-init.sh - Thin wrapper around Rust fusion-bridge init
 set -euo pipefail
 
 FUSION_DIR=".fusion"
-STATE_LOCK="${FUSION_DIR}/.state.lock"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE_DIR="$(dirname "$SCRIPT_DIR")/templates"
-ENGINE="python"
+ENGINE="rust"
 JSON_MODE=false
+
+source "$SCRIPT_DIR/lib/fusion-bridge.sh"
+
+usage() {
+    echo "Usage: fusion-init.sh [--engine rust] [--json]"
+}
+
+json_escape() {
+    local value="$1"
+    value=${value//\\/\\\\}
+    value=${value//"/\\"}
+    value=${value//$'\n'/\\n}
+    value=${value//$'\r'/\\r}
+    value=${value//$'\t'/\\t}
+    printf '%s' "$value"
+}
+
+fusion_dir_abs() {
+    if [ -d "$FUSION_DIR" ]; then
+        (
+            cd "$FUSION_DIR" 2>/dev/null && pwd
+        ) || printf '%s' "$FUSION_DIR"
+        return 0
+    fi
+
+    printf '%s' "$FUSION_DIR"
+}
 
 emit_json() {
     local result="$1"
     local reason="${2:-}"
-    local fusion_dir_abs
-
-    if [ -d "$FUSION_DIR" ]; then
-        fusion_dir_abs="$(cd "$FUSION_DIR" 2>/dev/null && pwd || echo "$FUSION_DIR")"
-    else
-        fusion_dir_abs="$FUSION_DIR"
-    fi
-
-    if command -v jq &>/dev/null; then
-        if [ -n "$reason" ]; then
-            jq -nc               --arg result "$result"               --arg reason "$reason"               --arg engine "$ENGINE"               --arg fusion_dir "$fusion_dir_abs"               '{result:$result,engine:$engine,fusion_dir:$fusion_dir,reason:$reason}'
-        else
-            jq -nc               --arg result "$result"               --arg engine "$ENGINE"               --arg fusion_dir "$fusion_dir_abs"               '{result:$result,engine:$engine,fusion_dir:$fusion_dir}'
-        fi
-        return 0
-    fi
-
-    if command -v python3 &>/dev/null; then
-        python3 - "$result" "$reason" "$ENGINE" "$fusion_dir_abs" <<'PYJSON'
-import json
-import sys
-
-result = sys.argv[1]
-reason = sys.argv[2]
-engine = sys.argv[3]
-fusion_dir = sys.argv[4]
-
-payload = {
-    "result": result,
-    "engine": engine,
-    "fusion_dir": fusion_dir,
-}
-if reason:
-    payload["reason"] = reason
-
-print(json.dumps(payload, ensure_ascii=False))
-PYJSON
-        return 0
-    fi
+    local abs_dir
+    abs_dir="$(fusion_dir_abs)"
 
     if [ -n "$reason" ]; then
-        printf '{"result":"%s","engine":"%s","fusion_dir":"%s","reason":"%s"}\n' "$result" "$ENGINE" "$fusion_dir_abs" "$reason"
+        printf '{"result":"%s","engine":"%s","fusion_dir":"%s","reason":"%s"}\n' \
+            "$(json_escape "$result")" \
+            "$(json_escape "$ENGINE")" \
+            "$(json_escape "$abs_dir")" \
+            "$(json_escape "$reason")"
     else
-        printf '{"result":"%s","engine":"%s","fusion_dir":"%s"}\n' "$result" "$ENGINE" "$fusion_dir_abs"
+        printf '{"result":"%s","engine":"%s","fusion_dir":"%s"}\n' \
+            "$(json_escape "$result")" \
+            "$(json_escape "$ENGINE")" \
+            "$(json_escape "$abs_dir")"
     fi
 }
 
 fail_with_message() {
     local reason="$1"
+    local exit_code="${2:-1}"
     if [ "$JSON_MODE" = true ]; then
         emit_json "error" "$reason"
     else
-        echo "❌ $reason" >&2
+        echo "$reason" >&2
     fi
-    exit 1
+    exit "$exit_code"
 }
 
 while [ "$#" -gt 0 ]; do
@@ -85,16 +82,16 @@ while [ "$#" -gt 0 ]; do
             ENGINE="${1#--engine=}"
             ;;
         -h|--help)
-            echo "Usage: fusion-init.sh [--engine python|rust] [--json]"
+            usage
             exit 0
             ;;
         *)
             if [ "$JSON_MODE" = true ]; then
                 emit_json "error" "Unknown option: $1"
-                exit 1
+            else
+                echo "Unknown option: $1" >&2
+                usage >&2
             fi
-            echo "❌ Unknown option: $1" >&2
-            echo "Usage: fusion-init.sh [--engine python|rust] [--json]" >&2
             exit 1
             ;;
     esac
@@ -102,186 +99,36 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$ENGINE" in
-    python|rust)
+    rust)
         ;;
     *)
-        fail_with_message "Invalid engine: $ENGINE (expected: python|rust)"
+        fail_with_message "Invalid engine: $ENGINE (expected: rust)"
         ;;
 esac
 
-# Refuse to overwrite existing active workflow
-if [ -f "$FUSION_DIR/sessions.json" ]; then
-    if command -v jq &>/dev/null; then
-        STATUS=$(jq -r '.status // "unknown"' "$FUSION_DIR/sessions.json" 2>/dev/null || echo "unknown")
-    else
-        STATUS=$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' "$FUSION_DIR/sessions.json" 2>/dev/null | head -1 | cut -d'"' -f4 || echo "unknown")
-    fi
-
-    if [ "$STATUS" = "in_progress" ] || [ "$STATUS" = "paused" ]; then
-        if [ "$JSON_MODE" = true ]; then
-            emit_json "error" "Cannot reinitialize: workflow is $STATUS"
-            exit 1
-        fi
-        echo "❌ Cannot reinitialize: workflow is $STATUS"
-        echo "   Use /fusion cancel or /fusion resume"
-        exit 1
-    fi
+if fusion_bridge_disabled; then
+    fail_with_message "[fusion][deps] fusion-init.sh now requires Rust fusion-bridge. Unset FUSION_BRIDGE_DISABLE or build with: cd rust && cargo build --release" 127
 fi
 
-# Reject symlink to prevent symlink attacks
-if [ -L "$FUSION_DIR" ]; then
-    fail_with_message "Security: $FUSION_DIR is a symlink, refusing to use"
-fi
+bridge_bin="$(resolve_fusion_bridge_bin "$SCRIPT_DIR")" || \
+    fail_with_message "[fusion][deps] Missing Rust fusion-bridge. Build with: cd rust && cargo build --release" 127
 
-# Create .fusion directory with restrictive permissions
-mkdir -p "$FUSION_DIR"
-chmod 700 "$FUSION_DIR"
-
-# Copy templates
-if [ -f "$TEMPLATE_DIR/task_plan.md" ]; then
-    cp "$TEMPLATE_DIR/task_plan.md" "$FUSION_DIR/task_plan.md"
-fi
-
-if [ -f "$TEMPLATE_DIR/progress.md" ]; then
-    cp "$TEMPLATE_DIR/progress.md" "$FUSION_DIR/progress.md"
-fi
-
-if [ -f "$TEMPLATE_DIR/findings.md" ]; then
-    cp "$TEMPLATE_DIR/findings.md" "$FUSION_DIR/findings.md"
-fi
-
-# Generate config.yaml with runtime enabled
-cat > "$FUSION_DIR/config.yaml" << CONFIG_EOF
-# Fusion Runtime Configuration
-# Generated by fusion-init.sh
-
-# Runtime engine (v2.6.3)
-runtime:
-  enabled: true
-  compat_mode: true
-  engine: "$ENGINE"  # python | rust
-  version: "2.6.3"
-
-# Understand settings
-understand:
-  pass_threshold: 7
-  require_confirmation: false
-  max_questions: 2
-
-
-# Backend configuration
-backends:
-  primary: codex
-  fallback: claude
-
-# Backend routing strategy
-backend_routing:
-  phase_routing:
-    UNDERSTAND: codex
-    INITIALIZE: codex
-    ANALYZE: codex
-    DECOMPOSE: codex
-    EXECUTE: claude
-    VERIFY: codex
-    REVIEW: codex
-    COMMIT: claude
-    DELIVER: claude
-  task_type_routing:
-    implementation: claude
-    verification: claude
-    design: codex
-    research: codex
-    documentation: claude
-    configuration: claude
-
-# Execution settings
-execution:
-  parallel: 2
-  timeout: 7200000  # 2 hours
-
-# Scheduler settings
-scheduler:
-  enabled: true
-  max_parallel: 2
-  fail_fast: false
-
-# Budget settings
-budget:
-  global_token_limit: 100000
-  global_latency_limit_ms: 7200000
-  warning_threshold: 0.8
-  hard_limit_action: serial
-
-# TDD settings
-tdd:
-  enabled: true
-  test_command: null  # auto-detect
-
-# Git integration
-git:
-  enabled: true
-  branch_prefix: "fusion/"
-  auto_commit: true
-
-# Safe backlog fallback tasks
-safe_backlog:
-  enabled: true
-  trigger_no_progress_rounds: 3
-  inject_on_task_exhausted: true
-  max_tasks_per_run: 2
-  allowed_categories: "quality,documentation,optimization"
-  diversity_rotation: true
-  novelty_window: 12
-  backoff_enabled: true
-  backoff_base_rounds: 1
-  backoff_max_rounds: 32
-  backoff_jitter: 0.2
-  backoff_force_probe_rounds: 20
-CONFIG_EOF
-
-# Copy sessions.json template (no lock needed - this is initialization)
-if [ -f "$TEMPLATE_DIR/sessions.json" ]; then
-    cp "$TEMPLATE_DIR/sessions.json" "$FUSION_DIR/sessions.json"
-else
-    # Fallback: create basic sessions.json
-    cat > "$FUSION_DIR/sessions.json" << 'SESSIONS_EOF'
-{
-  "workflow_id": null,
-  "goal": null,
-  "started_at": null,
-  "status": "not_started",
-  "current_phase": null,
-  "codex_session": null,
-  "claude_session": null,
-  "tasks": {},
-  "strikes": {
-    "current_task": null,
-    "count": 0,
-    "history": []
-  },
-  "git": {
-    "branch": null,
-    "commits": []
-  },
-  "last_checkpoint": null
-}
-SESSIONS_EOF
-fi
-
-# Add to .gitignore if not already there
-if [ -f ".gitignore" ]; then
-    if ! grep -q "^\.fusion/$" .gitignore 2>/dev/null; then
-        echo "" >> .gitignore
-        echo "# Fusion working directory" >> .gitignore
-        echo ".fusion/" >> .gitignore
-    fi
-fi
+bridge_args=(init --fusion-dir "$FUSION_DIR" --templates-dir "$TEMPLATE_DIR" --engine "$ENGINE")
 
 if [ "$JSON_MODE" = true ]; then
-    emit_json "ok"
-    exit 0
+    stderr_file="$(mktemp)"
+    if "$bridge_bin" "${bridge_args[@]}" >/dev/null 2>"$stderr_file"; then
+        rm -f "$stderr_file"
+        emit_json "ok"
+        exit 0
+    fi
+    reason="$(cat "$stderr_file" 2>/dev/null || true)"
+    rm -f "$stderr_file"
+    reason="${reason#"${reason%%[![:space:]]*}"}"
+    reason="${reason%"${reason##*[![:space:]]}"}"
+    [ -n "$reason" ] || reason="fusion-bridge init failed"
+    emit_json "error" "$reason"
+    exit 1
 fi
 
-echo "[fusion] Initialized .fusion directory"
-echo "[fusion] Files created:"
-ls -la "$FUSION_DIR"
+"$bridge_bin" "${bridge_args[@]}"

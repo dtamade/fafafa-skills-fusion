@@ -6,14 +6,14 @@
 
 **Architecture:** 严格 `RED -> GREEN -> REFACTOR`。先新增失败测试覆盖缺口，再最小修改 shell 脚本，最后跑 targeted + full 回归。
 
-**Tech Stack:** Bash, Python `pytest`, Markdown。
+**Tech Stack:** Bash, Markdown。
 
 ---
 
 ### Task 1: R16-001/R16-002 logs + git 契约修复
 
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_control_script_validation.py`
+- Modify: `scripts/runtime/tests/test_fusion_control_script_validation`
 - Modify: `scripts/fusion-logs.sh`
 - Modify: `scripts/fusion-git.sh`
 
@@ -22,8 +22,8 @@
   - `logs` 对未知选项返回 `Unknown option` + usage。
   - `git` unknown action 写入 stderr 并带 usage。
 - Run:
-  - `pytest -q scripts/runtime/tests/test_fusion_control_script_validation.py::TestFusionLogsValidation::test_logs_rejects_unknown_option`
-  - `pytest -q scripts/runtime/tests/test_fusion_control_script_validation.py::TestFusionGitValidation::test_git_unknown_action_reports_to_stderr_with_usage`
+  - 测试记录： `scripts/runtime/tests/test_fusion_control_script_validation::TestFusionLogsValidation::test_logs_rejects_unknown_option`
+  - 测试记录： `scripts/runtime/tests/test_fusion_control_script_validation::TestFusionGitValidation::test_git_unknown_action_reports_to_stderr_with_usage`
 - Expected: FAIL。
 
 **Step 2: GREEN**
@@ -38,11 +38,11 @@
 ### Task 2: R16-003 stop-guard structured 空 stdin 契约
 
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_stop_guard_script.py`
+- Modify: `scripts/runtime/tests/test_fusion_stop_guard_script`
 
 **Step 1: RED**
 - 新增 `test_structured_blocks_with_empty_stdin`。
-- Run: `pytest -q scripts/runtime/tests/test_fusion_stop_guard_script.py::TestFusionStopGuardScript::test_structured_blocks_with_empty_stdin`
+- 测试记录： `scripts/runtime/tests/test_fusion_stop_guard_script::TestFusionStopGuardScript::test_structured_blocks_with_empty_stdin`
 - Expected: 若行为不稳定则 FAIL。
 
 **Step 2: GREEN**
@@ -56,11 +56,11 @@
 ### Task 3: R16-004 runtime parity（shell hook path）
 
 **Files:**
-- Modify: `scripts/runtime/tests/test_hook_shell_runtime_path.py`
+- Modify: `scripts/runtime/tests/test_hook_shell_runtime_path`
 
 **Step 1: RED**
 - 新增 `test_stop_guard_structured_without_stdin_uses_runtime_adapter`。
-- Run: `pytest -q scripts/runtime/tests/test_hook_shell_runtime_path.py::TestHookShellRuntimePath::test_stop_guard_structured_without_stdin_uses_runtime_adapter`
+- 测试记录： `scripts/runtime/tests/test_hook_shell_runtime_path::TestHookShellRuntimePath::test_stop_guard_structured_without_stdin_uses_runtime_adapter`
 - Expected: FAIL（当前未覆盖该行为）。
 
 **Step 2: GREEN**
@@ -75,6 +75,9 @@
 
 Run:
 - `bash -n scripts/fusion-logs.sh scripts/fusion-git.sh scripts/fusion-stop-guard.sh`
-- `pytest -q scripts/runtime/tests/test_fusion_control_script_validation.py scripts/runtime/tests/test_fusion_stop_guard_script.py scripts/runtime/tests/test_hook_shell_runtime_path.py`
-- `pytest -q scripts/runtime/tests/test_fusion_status_script.py scripts/runtime/tests/test_fusion_achievements_script.py scripts/runtime/tests/test_fusion_control_script_validation.py scripts/runtime/tests/test_fusion_codeagent_script.py scripts/runtime/tests/test_fusion_hook_doctor_script.py scripts/runtime/tests/test_fusion_start_script.py scripts/runtime/tests/test_loop_guardian_script.py scripts/runtime/tests/test_fusion_stop_guard_script.py scripts/runtime/tests/test_hook_shell_runtime_path.py scripts/runtime/tests/test_docs_freshness.py`
-- `pytest -q`
+- 测试记录： `scripts/runtime/tests/test_fusion_control_script_validation scripts/runtime/tests/test_fusion_stop_guard_script scripts/runtime/tests/test_hook_shell_runtime_path`
+- 测试记录： `scripts/runtime/tests/test_fusion_status_script scripts/runtime/tests/test_fusion_achievements_script scripts/runtime/tests/test_fusion_control_script_validation scripts/runtime/tests/test_fusion_codeagent_script scripts/runtime/tests/test_fusion_hook_doctor_script scripts/runtime/tests/test_fusion_start_script scripts/runtime/tests/test_loop_guardian_script scripts/runtime/tests/test_fusion_stop_guard_script scripts/runtime/tests/test_hook_shell_runtime_path scripts/runtime/tests/test_docs_freshness`
+- 全量验证记录
+
+> 归档说明：本文保留其历史上下文。当前行为请以 Rust 与 Shell 契约为准。
+

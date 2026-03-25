@@ -199,7 +199,7 @@ null
 |------|--------|----------|
 | `package.json` | Node.js | jest/mocha/vitest |
 | `go.mod` | Go | go test |
-| `pyproject.toml` / `setup.py` | Python | pytest |
+| `deno.json` | Deno | deno test |
 | `Cargo.toml` | Rust | cargo test |
 | `pom.xml` / `build.gradle` | Java | JUnit |
 | `composer.json` | PHP | PHPUnit |

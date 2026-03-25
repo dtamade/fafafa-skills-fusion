@@ -92,7 +92,7 @@ tasks:
     estimated_minutes: 10
     files: []
     test_files:
-      - tests/auth/test_register.py
+      - tests/auth/register.test.ts
 
   - id: auth_register_impl
     type: implementation
@@ -101,8 +101,8 @@ tasks:
     dependencies: [auth_register_test]
     estimated_minutes: 15
     files:
-      - src/auth/register.py
-      - src/auth/routes.py
+      - src/auth/register.ts
+      - src/auth/routes.ts
 
   - id: auth_login_test
     type: verification
@@ -111,7 +111,7 @@ tasks:
     dependencies: [auth_api_design, user_schema]
     estimated_minutes: 10
     test_files:
-      - tests/auth/test_login.py
+      - tests/auth/login.test.ts
 
   - id: auth_login_impl
     type: implementation
@@ -120,8 +120,8 @@ tasks:
     dependencies: [auth_login_test]
     estimated_minutes: 15
     files:
-      - src/auth/login.py
-      - src/auth/jwt.py
+      - src/auth/login.ts
+      - src/auth/jwt.ts
 
   - id: integration_tests
     type: verification
@@ -130,7 +130,7 @@ tasks:
     dependencies: [auth_register_impl, auth_login_impl]
     estimated_minutes: 10
     test_files:
-      - tests/integration/test_auth_flow.py
+      - tests/integration/auth-flow.test.ts
 ```
 
 ## Now analyze and decompose:

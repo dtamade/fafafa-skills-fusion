@@ -4,28 +4,28 @@
 
 **Goal:** 解决团队调度中“双后端失败不可观测”的缺口，让失败信息可机器读取、可在状态命令中展示，并同步文档。
 
-**Architecture:** 继续沿用 shell+pytest 契约驱动。先在 `fusion-codeagent.sh` 写入 `backend_failure_report.json`，再让 `fusion-status.sh` 读取该报告暴露摘要，最后通过 docs freshness 强制 README 中英长期同步该运维路径。
+**Architecture:** 继续沿用 shell 与归档测试调用记录共同定义的契约。先在 `fusion-codeagent.sh` 写入 `backend_failure_report.json`，再让 `fusion-status.sh` 读取该报告暴露摘要，最后通过 docs freshness 强制 README 中英长期同步该运维路径。
 
-**Tech Stack:** Bash, Python unittest (pytest runner), Markdown docs.
+**Tech Stack:** Bash, Markdown docs.
 
 ---
 
 ### Task 1: codeagent 双后端失败报告
 
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_codeagent_script.py`
+- Modify: `scripts/runtime/tests/test_fusion_codeagent_script`
 - Modify: `scripts/fusion-codeagent.sh`
 
 **Step 1: Write the failing test**
 
-在 `test_fusion_codeagent_script.py` 新增：
+在 `test_fusion_codeagent_script` 新增：
 - 双后端均失败时，返回非 0。
 - 生成 `.fusion/backend_failure_report.json`。
 - 报告包含 `status=blocked`、`source=fusion-codeagent.sh`、`primary_backend`、`fallback_backend`、`primary_error`、`fallback_error`。
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_codeagent_script.py::TestFusionCodeagentScript::test_double_backend_failure_writes_backend_failure_report`
+测试记录： `scripts/runtime/tests/test_fusion_codeagent_script::TestFusionCodeagentScript::test_double_backend_failure_writes_backend_failure_report`
 Expected: FAIL（文件不存在或字段缺失）
 
 **Step 3: Write minimal implementation**
@@ -37,12 +37,12 @@ Expected: FAIL（文件不存在或字段缺失）
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_codeagent_script.py::TestFusionCodeagentScript::test_double_backend_failure_writes_backend_failure_report`
+测试记录： `scripts/runtime/tests/test_fusion_codeagent_script::TestFusionCodeagentScript::test_double_backend_failure_writes_backend_failure_report`
 Expected: PASS
 
 **Step 5: Verify task scope regression**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_codeagent_script.py`
+测试记录： `scripts/runtime/tests/test_fusion_codeagent_script`
 Expected: PASS
 
 ---
@@ -50,7 +50,7 @@ Expected: PASS
 ### Task 2: status 暴露 backend failure 摘要
 
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_status_script.py`
+- Modify: `scripts/runtime/tests/test_fusion_status_script`
 - Modify: `scripts/fusion-status.sh`
 
 **Step 1: Write the failing tests**
@@ -62,8 +62,8 @@ Expected: PASS
 **Step 2: Run tests to verify they fail**
 
 Run:
-- `pytest -q scripts/runtime/tests/test_fusion_status_script.py::TestFusionStatusScript::test_status_json_includes_backend_failure_summary`
-- `pytest -q scripts/runtime/tests/test_fusion_status_script.py::TestFusionStatusScript::test_status_prints_backend_failure_report`
+- 测试记录： `scripts/runtime/tests/test_fusion_status_script::TestFusionStatusScript::test_status_json_includes_backend_failure_summary`
+- 测试记录： `scripts/runtime/tests/test_fusion_status_script::TestFusionStatusScript::test_status_prints_backend_failure_report`
 Expected: FAIL（字段/区块不存在）
 
 **Step 3: Write minimal implementation**
@@ -75,13 +75,13 @@ Expected: FAIL（字段/区块不存在）
 **Step 4: Run tests to verify they pass**
 
 Run:
-- `pytest -q scripts/runtime/tests/test_fusion_status_script.py::TestFusionStatusScript::test_status_json_includes_backend_failure_summary`
-- `pytest -q scripts/runtime/tests/test_fusion_status_script.py::TestFusionStatusScript::test_status_prints_backend_failure_report`
+- 测试记录： `scripts/runtime/tests/test_fusion_status_script::TestFusionStatusScript::test_status_json_includes_backend_failure_summary`
+- 测试记录： `scripts/runtime/tests/test_fusion_status_script::TestFusionStatusScript::test_status_prints_backend_failure_report`
 Expected: PASS
 
 **Step 5: Verify task scope regression**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_status_script.py`
+测试记录： `scripts/runtime/tests/test_fusion_status_script`
 Expected: PASS
 
 ---
@@ -89,18 +89,18 @@ Expected: PASS
 ### Task 3: README 中英补齐 backend failure 指引
 
 **Files:**
-- Modify: `scripts/runtime/tests/test_docs_freshness.py`
+- Modify: `scripts/runtime/tests/test_docs_freshness`
 - Modify: `README.md`
 - Modify: `README.zh-CN.md`
 
 **Step 1: Write the failing test**
 
-在 `test_docs_freshness.py` 增加断言：
+在 `test_docs_freshness` 增加断言：
 - `README.md` 与 `README.zh-CN.md` 都必须提及 `.fusion/backend_failure_report.json`。
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_docs_freshness.py::TestDocsFreshness::test_readme_en_zh_mention_backend_failure_report`
+测试记录： `scripts/runtime/tests/test_docs_freshness::TestDocsFreshness::test_readme_en_zh_mention_backend_failure_report`
 Expected: FAIL
 
 **Step 3: Write minimal implementation**
@@ -111,12 +111,12 @@ Expected: FAIL
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_docs_freshness.py::TestDocsFreshness::test_readme_en_zh_mention_backend_failure_report`
+测试记录： `scripts/runtime/tests/test_docs_freshness::TestDocsFreshness::test_readme_en_zh_mention_backend_failure_report`
 Expected: PASS
 
 **Step 5: Verify task scope regression**
 
-Run: `pytest -q scripts/runtime/tests/test_docs_freshness.py`
+测试记录： `scripts/runtime/tests/test_docs_freshness`
 Expected: PASS
 
 ---
@@ -125,10 +125,12 @@ Expected: PASS
 
 Run:
 - `bash -n scripts/*.sh`
-- `pytest -q scripts/runtime/tests/test_fusion_codeagent_script.py scripts/runtime/tests/test_fusion_status_script.py scripts/runtime/tests/test_docs_freshness.py scripts/runtime/tests/test_release_contract_audit_script.py scripts/runtime/tests/test_regression_runner_contract_suite.py scripts/runtime/tests/test_ci_contract_gates.py`
-- `pytest -q`
+- 测试记录： `scripts/runtime/tests/test_fusion_codeagent_script scripts/runtime/tests/test_fusion_status_script scripts/runtime/tests/test_docs_freshness scripts/runtime/tests/test_release_contract_audit_script scripts/runtime/tests/test_regression_runner_contract_suite scripts/runtime/tests/test_ci_contract_gates`
+- 全量验证记录
 - `(cd rust && cargo clippy --workspace --all-targets -- -D warnings)`
 - `(cd rust && cargo fmt --all -- --check)`
 
 Expected:
 - all commands pass with no regressions
+
+> 归档说明：本文保留其历史上下文。当前行为请以 Rust 与 Shell 契约为准。

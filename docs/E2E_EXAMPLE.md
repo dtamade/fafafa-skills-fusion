@@ -5,20 +5,32 @@ This example shows a full `/fusion` run with the default routing strategy:
 - Codex: planning/analysis/review
 - Claude: implementation/verification execution
 
+The routing shown below reflects the checked-in `templates/config.yaml` baseline. Actual runs consume the generated `.fusion/config.yaml` initialized from that baseline. If maintainers change `backend_routing`, update this example together with the template.
+If this example's active routing baseline or repository/runtime contract changes, update the affected active docs together with `rust/crates/fusion-cli/tests/repo_contract.rs` / `rust/crates/fusion-cli/tests/shell_contract.rs`.
+
 ## Scenario
 
 ```bash
 /fusion "add email verification for signup"
 ```
 
-## 1) UNDERSTAND summary
+## 1) UNDERSTAND handoff
 
 ```text
+[fusion] UNDERSTAND runner currently minimal; proceed to INITIALIZE
+[fusion] Current state: in_progress @ INITIALIZE
+[fusion] Next action: Initialize workspace files and proceed to ANALYZE
+[FUSION] Workflow initialized.
 Goal: add email verification for signup
-Context: FastAPI + PostgreSQL + pytest
-Scope: model change + API update + tests + docs
-Assumptions: token via signed URL, 24h expiry
-Decision: score=8 >= 7, continue to INITIALIZE
+```
+
+Current live start path also records this handoff in `.fusion/sessions.json`:
+
+```text
+_runtime.state=INITIALIZE
+_runtime.understand.mode=minimal
+_runtime.understand.forced=false
+_runtime.understand.decision=auto_continue
 ```
 
 ## 2) DECOMPOSE output (task types)
@@ -67,5 +79,7 @@ Reason: no_progress_rounds=3
 
 Use host-level hooks (example file):
 
-- `.claude/settings.example.json`
+- `.claude/settings.example.json` (checked-in template)
 - `docs/HOOKS_SETUP.md`
+
+The checked-in `.claude/settings.example.json` file is just the template. The actual `.claude/settings.json` and `.claude/settings.local.json` files are host-local hook configuration, not tracked workflow artifacts or repository-structure evidence.

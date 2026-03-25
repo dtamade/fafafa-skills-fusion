@@ -4,9 +4,9 @@
 
 **Goal:** 修复 Rust 质量门禁（clippy + fmt）并统一 `fusion-status.sh --help` 行为，保证 CLI 与质量基线一致。
 
-**Architecture:** 严格 `RED -> GREEN -> REFACTOR`。先用失败命令/测试确认缺口，再做最小改动；任务完成后执行 Rust + Python 回归与全量验证。
+**Architecture:** 严格 `RED -> GREEN -> REFACTOR`。先用失败命令/测试确认缺口，再做最小改动；任务完成后执行 Rust + 旧 runtime 回归与全量验证。
 
-**Tech Stack:** Rust (`cargo clippy/fmt/test`), Bash, Python `pytest`, Markdown。
+**Tech Stack:** Rust (`cargo clippy/fmt/test`), Bash, Markdown。
 
 ---
 
@@ -51,19 +51,20 @@
 ### Task 3: C10 `fusion-status.sh` 支持 `--help`
 
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_status_script.py`
+- Modify: `scripts/runtime/tests/test_fusion_status_script`
 - Modify: `scripts/fusion-status.sh`
 
 **Step 1: RED**
 - 新增测试 `test_status_help_exits_zero_without_fusion_dir`。
-- Run: `pytest -q scripts/runtime/tests/test_fusion_status_script.py::TestFusionStatusScript::test_status_help_exits_zero_without_fusion_dir`
+- 测试记录： `scripts/runtime/tests/test_fusion_status_script::TestFusionStatusScript::test_status_help_exits_zero_without_fusion_dir`
 - Expected: FAIL（当前无 `.fusion` 时返回 1）。
 
 **Step 2: GREEN**
 - 增加 `usage()` 与 `-h|--help` 早返回分支。
 
 **Step 3: VERIFY**
-- Run: `bash -n scripts/fusion-status.sh && pytest -q scripts/runtime/tests/test_fusion_status_script.py::TestFusionStatusScript::test_status_help_exits_zero_without_fusion_dir`
+- Run: `bash -n scripts/fusion-status.sh`
+- 测试记录： `scripts/runtime/tests/test_fusion_status_script::TestFusionStatusScript::test_status_help_exits_zero_without_fusion_dir`
 - Expected: PASS。
 
 ---
@@ -72,6 +73,8 @@
 
 Run:
 - `bash -n scripts/fusion-status.sh scripts/fusion-logs.sh scripts/fusion-git.sh scripts/fusion-codeagent.sh`
-- `pytest -q scripts/runtime/tests/test_fusion_status_script.py scripts/runtime/tests/test_fusion_control_script_validation.py scripts/runtime/tests/test_fusion_codeagent_script.py`
+- 测试记录： `scripts/runtime/tests/test_fusion_status_script scripts/runtime/tests/test_fusion_control_script_validation scripts/runtime/tests/test_fusion_codeagent_script`
 - `cd rust && cargo test -q && cargo clippy --workspace --all-targets -- -D warnings && cargo fmt --all -- --check`
-- `pytest -q`
+- 全量验证记录
+
+> 归档说明：本文保留其历史上下文。当前行为请以 Rust 与 Shell 契约为准。

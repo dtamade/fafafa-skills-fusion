@@ -6,7 +6,7 @@
 
 **Architecture:** 严格 `RED -> GREEN -> REFACTOR`；先锁失败测试，再最小实现，最后全量回归与日志回填。
 
-**Tech Stack:** Bash, Python `pytest`, GitHub Actions YAML。
+**Tech Stack:** Bash, GitHub Actions YAML。
 
 ---
 
@@ -14,7 +14,7 @@
 
 **Files:**
 - Modify: `scripts/release-contract-audit.sh`
-- Modify: `scripts/runtime/tests/test_release_contract_audit_script.py`
+- Modify: `scripts/runtime/tests/test_release_contract_audit_script`
 
 **Step 1: RED**
 - 新增测试：`--json --fast --skip-rust` 输出包含：
@@ -35,8 +35,8 @@
 ### Task 2: R22-002 regression_runner suite 执行 JSON 汇总
 
 **Files:**
-- Modify: `scripts/runtime/regression_runner.py`
-- Modify: `scripts/runtime/tests/test_regression_runner_contract_suite.py`
+- Modify: `scripts/runtime/regression_runner`
+- Modify: `scripts/runtime/tests/test_regression_runner_contract_suite`
 
 **Step 1: RED**
 - 新增测试：`--suite contract --json` 返回 JSON 汇总（`result/suite/passed/total/pass_rate`）。
@@ -54,12 +54,12 @@
 
 **Files:**
 - Modify: `.github/workflows/ci-contract-gates.yml`
-- Modify: `scripts/runtime/tests/test_ci_contract_gates.py`
+- Modify: `scripts/runtime/tests/test_ci_contract_gates`
 
 **Step 1: RED**
 - 新增测试：workflow 包含：
   - `release-contract-audit.sh --dry-run --json`
-  - `regression_runner.py --list-suites --json`
+  - `regression_runner --list-suites --json`
 - 运行测试，预期 FAIL。
 
 **Step 2: GREEN**
@@ -74,8 +74,11 @@
 
 Run:
 - `bash -n scripts/release-contract-audit.sh scripts/fusion-*.sh`
-- `pytest -q scripts/runtime/tests/test_release_contract_audit_script.py scripts/runtime/tests/test_regression_runner_contract_suite.py scripts/runtime/tests/test_ci_contract_gates.py`
-- `pytest -q scripts/runtime/tests/test_fusion_status_script.py scripts/runtime/tests/test_fusion_achievements_script.py scripts/runtime/tests/test_fusion_control_script_validation.py scripts/runtime/tests/test_fusion_codeagent_script.py scripts/runtime/tests/test_fusion_hook_doctor_script.py scripts/runtime/tests/test_fusion_start_script.py scripts/runtime/tests/test_loop_guardian_script.py scripts/runtime/tests/test_fusion_stop_guard_script.py scripts/runtime/tests/test_hook_shell_runtime_path.py scripts/runtime/tests/test_docs_freshness.py scripts/runtime/tests/test_ci_contract_gates.py scripts/runtime/tests/test_release_contract_audit_script.py scripts/runtime/tests/test_regression_runner_contract_suite.py`
-- `pytest -q`
+- 测试记录： `scripts/runtime/tests/test_release_contract_audit_script scripts/runtime/tests/test_regression_runner_contract_suite scripts/runtime/tests/test_ci_contract_gates`
+- 测试记录： `scripts/runtime/tests/test_fusion_status_script scripts/runtime/tests/test_fusion_achievements_script scripts/runtime/tests/test_fusion_control_script_validation scripts/runtime/tests/test_fusion_codeagent_script scripts/runtime/tests/test_fusion_hook_doctor_script scripts/runtime/tests/test_fusion_start_script scripts/runtime/tests/test_loop_guardian_script scripts/runtime/tests/test_fusion_stop_guard_script scripts/runtime/tests/test_hook_shell_runtime_path scripts/runtime/tests/test_docs_freshness scripts/runtime/tests/test_ci_contract_gates scripts/runtime/tests/test_release_contract_audit_script scripts/runtime/tests/test_regression_runner_contract_suite`
+- 全量验证记录
 - `(cd rust && cargo clippy --workspace --all-targets -- -D warnings)`
 - `(cd rust && cargo fmt --all -- --check)`
+
+> 归档说明：本文保留其历史上下文。当前行为请以 Rust 与 Shell 契约为准。
+

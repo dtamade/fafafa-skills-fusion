@@ -6,7 +6,7 @@
 
 **Architecture:** 本轮继续“测试先行 + 最小实现”策略。先为每个行为写失败测试，再做脚本最小改动，最后执行目标回归与全量回归。所有新增能力保持向后兼容（默认行为不变）。
 
-**Tech Stack:** Bash, Python (pytest), Markdown。
+**Tech Stack:** Bash, Markdown。
 
 ---
 
@@ -14,7 +14,7 @@
 
 **Priority:** P0  
 **Files:**
-- Create: `scripts/runtime/tests/test_fusion_start_script.py`
+- Create: `scripts/runtime/tests/test_fusion_start_script`
 - Modify: `scripts/fusion-start.sh`
 
 **Step 1: Write the failing test**
@@ -25,7 +25,7 @@
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_start_script.py::TestFusionStartScript::test_rejects_unknown_option scripts/runtime/tests/test_fusion_start_script.py::TestFusionStartScript::test_rejects_multiple_goals`  
+测试记录： `scripts/runtime/tests/test_fusion_start_script::TestFusionStartScript::test_rejects_unknown_option scripts/runtime/tests/test_fusion_start_script::TestFusionStartScript::test_rejects_multiple_goals`  
 Expected: FAIL。
 
 **Step 3: Write minimal implementation**
@@ -37,16 +37,16 @@ Expected: FAIL。
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_start_script.py::TestFusionStartScript::test_rejects_unknown_option scripts/runtime/tests/test_fusion_start_script.py::TestFusionStartScript::test_rejects_multiple_goals`  
+测试记录： `scripts/runtime/tests/test_fusion_start_script::TestFusionStartScript::test_rejects_unknown_option scripts/runtime/tests/test_fusion_start_script::TestFusionStartScript::test_rejects_multiple_goals`  
 Expected: PASS。
 
 ---
 
-### Task 2: `fusion-init.sh` 增加 `--engine rust|python`
+### Task 2: `fusion-init.sh` 增加 `--engine rust|旧 runtime`
 
 **Priority:** P1  
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_start_script.py`
+- Modify: `scripts/runtime/tests/test_fusion_start_script`
 - Modify: `scripts/fusion-init.sh`
 
 **Step 1: Write the failing test**
@@ -55,19 +55,19 @@ Expected: PASS。
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_start_script.py::TestFusionStartScript::test_fusion_init_supports_rust_engine`  
-Expected: FAIL（当前固定为 `python`）。
+测试记录： `scripts/runtime/tests/test_fusion_start_script::TestFusionStartScript::test_fusion_init_supports_rust_engine`  
+Expected: FAIL（当前固定为 `旧 runtime`）。
 
 **Step 3: Write minimal implementation**
 
 在 `fusion-init.sh` 增加参数解析：
-- `--engine rust|python`（默认 python）
+- `--engine rust|旧 runtime`（默认旧 runtime）
 - 非法 engine 值报错退出
 - 将 `config.yaml` 中 engine 从硬编码替换为变量值
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_start_script.py::TestFusionStartScript::test_fusion_init_supports_rust_engine`  
+测试记录： `scripts/runtime/tests/test_fusion_start_script::TestFusionStartScript::test_fusion_init_supports_rust_engine`  
 Expected: PASS。
 
 ---
@@ -76,7 +76,7 @@ Expected: PASS。
 
 **Priority:** P1  
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_start_script.py`
+- Modify: `scripts/runtime/tests/test_fusion_start_script`
 - Modify: `scripts/fusion-init.sh`
 
 **Step 1: Write the failing test**
@@ -87,7 +87,7 @@ Expected: PASS。
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_start_script.py::TestFusionStartScript::test_fusion_init_json_success scripts/runtime/tests/test_fusion_start_script.py::TestFusionStartScript::test_fusion_init_json_error_on_invalid_engine`  
+测试记录： `scripts/runtime/tests/test_fusion_start_script::TestFusionStartScript::test_fusion_init_json_success scripts/runtime/tests/test_fusion_start_script::TestFusionStartScript::test_fusion_init_json_error_on_invalid_engine`  
 Expected: FAIL。
 
 **Step 3: Write minimal implementation**
@@ -100,7 +100,7 @@ Expected: FAIL。
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_start_script.py::TestFusionStartScript::test_fusion_init_json_success scripts/runtime/tests/test_fusion_start_script.py::TestFusionStartScript::test_fusion_init_json_error_on_invalid_engine`  
+测试记录： `scripts/runtime/tests/test_fusion_start_script::TestFusionStartScript::test_fusion_init_json_success scripts/runtime/tests/test_fusion_start_script::TestFusionStartScript::test_fusion_init_json_error_on_invalid_engine`  
 Expected: PASS。
 
 ---
@@ -108,5 +108,7 @@ Expected: PASS。
 ## Final Regression (Round 2)
 
 Run:
-- `pytest -q scripts/runtime/tests/test_fusion_start_script.py scripts/runtime/tests/test_docs_freshness.py scripts/runtime/tests/test_fusion_hook_doctor_script.py scripts/runtime/tests/test_fusion_status_script.py`
-- `pytest -q`
+- 测试记录： `scripts/runtime/tests/test_fusion_start_script scripts/runtime/tests/test_docs_freshness scripts/runtime/tests/test_fusion_hook_doctor_script scripts/runtime/tests/test_fusion_status_script`
+- 全量验证记录
+
+> 归档说明：本文保留其历史上下文。当前行为请以 Rust 与 Shell 契约为准。

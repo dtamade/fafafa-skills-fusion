@@ -36,7 +36,8 @@ Fusion 支持并行执行独立任务以提高效率。
 
 1. **无依赖任务** - 可以并行执行
 2. **有依赖任务** - 等待所有依赖完成后执行
-3. **最大并行度** - 由 `config.yaml` 中的 `parallel` 配置控制（默认 2）
+3. **最大并行度** - 当前由 `execution.parallel` 与 `scheduler.max_parallel` 共同约束；模板默认值均为 `2`
+4. **并行开关与冲突策略** - `parallel.enabled` 控制是否启用并行，`parallel.conflict_check` 与 `parallel.fail_fast` 控制冲突检测和失败策略
 
 ---
 
@@ -96,7 +97,7 @@ TaskOutput({ task_id: "task2_id", block: true, timeout: 600000 })
 
 ### 拓扑排序
 
-```python
+```text
 def topological_sort(tasks):
     """
     返回任务的执行顺序，考虑依赖关系。
@@ -132,6 +133,7 @@ def topological_sort(tasks):
 ### 执行示例
 
 给定任务:
+
 ```yaml
 tasks:
   - id: A, dependencies: []
@@ -142,6 +144,7 @@ tasks:
 ```
 
 执行顺序:
+
 ```
 Batch 1 (parallel): [A, B]
 Batch 2 (parallel): [C, D]  # 等待 A, B 完成
@@ -155,12 +158,14 @@ Batch 3: [E]                 # 等待 C, D 完成
 ### 文件冲突
 
 并行任务不应修改同一文件。如果检测到冲突：
+
 1. 将冲突任务改为串行执行
 2. 或者拆分任务以避免冲突
 
 ### Session 管理
 
 每个并行任务可能有自己的 Codex session：
+
 ```json
 {
   "tasks": {
@@ -187,16 +192,16 @@ Batch 3: [E]                 # 等待 C, D 完成
 ### progress.md 格式
 
 ```markdown
-| Time | Event | Status | Details |
-|------|-------|--------|---------|
-| 14:30 | Batch 1 started | OK | Tasks: A, B (parallel) |
-| 14:35 | Task A completed | OK | Duration: 5min |
-| 14:36 | Task B completed | OK | Duration: 6min |
-| 14:36 | Batch 2 started | OK | Tasks: C, D (parallel) |
-| 14:42 | Task C completed | OK | Duration: 6min |
-| 14:43 | Task D completed | OK | Duration: 7min |
-| 14:43 | Batch 3 started | OK | Tasks: E |
-| 14:48 | Task E completed | OK | Duration: 5min |
+| Time  | Event            | Status | Details                |
+| ----- | ---------------- | ------ | ---------------------- |
+| 14:30 | Batch 1 started  | OK     | Tasks: A, B (parallel) |
+| 14:35 | Task A completed | OK     | Duration: 5min         |
+| 14:36 | Task B completed | OK     | Duration: 6min         |
+| 14:36 | Batch 2 started  | OK     | Tasks: C, D (parallel) |
+| 14:42 | Task C completed | OK     | Duration: 6min         |
+| 14:43 | Task D completed | OK     | Duration: 7min         |
+| 14:43 | Batch 3 started  | OK     | Tasks: E               |
+| 14:48 | Task E completed | OK     | Duration: 5min         |
 ```
 
 ### sessions.json 格式
@@ -224,15 +229,24 @@ Batch 3: [E]                 # 等待 C, D 完成
 
 ## 配置
 
-### config.yaml
+### `.fusion/config.yaml`
+
+当前推荐基线请参考 `templates/config.yaml`。
+
+如果这里描述的并行配置基线或相关仓库/runtime 契约发生变化，请同步更新相关活文档，以及 `rust/crates/fusion-cli/tests/repo_contract.rs` / `rust/crates/fusion-cli/tests/shell_contract.rs`。
 
 ```yaml
 execution:
-  parallel: 2          # 最大并行任务数
-  batch_timeout: 1800  # 每批次超时（秒）
+  parallel: 2 # 最大并行任务数
+  batch_timeout: 1800 # 每批次超时（秒）
 
 parallel:
   enabled: true
-  conflict_check: true  # 检查文件冲突
-  fail_fast: false      # 一个失败是否停止所有
+  conflict_check: true # 检查文件冲突
+  fail_fast: false # 一个失败是否停止所有
+
+scheduler:
+  enabled: true
+  max_parallel: 2 # 调度器批次并行度上限
+  fail_fast: false
 ```

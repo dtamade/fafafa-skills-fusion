@@ -25,9 +25,23 @@ pub struct DependencyReport {
 pub struct FlatConfig {
     pub runtime_enabled: bool,
     pub runtime_compat_mode: bool,
+    pub runtime_engine: String,
 
     pub backend_primary: String,
     pub backend_fallback: String,
+    pub backend_phase_routing: HashMap<String, String>,
+    pub backend_task_type_routing: HashMap<String, String>,
+
+    pub agent_enabled: bool,
+    pub agent_mode: String,
+    pub agent_review_policy: String,
+    pub agent_explain_level: String,
+
+    pub execution_parallel: i64,
+    pub parallel_enabled: bool,
+    pub parallel_conflict_check: bool,
+    pub scheduler_enabled: bool,
+    pub scheduler_max_parallel: i64,
 
     pub safe_backlog_enabled: bool,
     pub safe_backlog_trigger_no_progress_rounds: i64,
@@ -60,9 +74,23 @@ impl Default for FlatConfig {
         Self {
             runtime_enabled: false,
             runtime_compat_mode: true,
+            runtime_engine: "rust".to_string(),
 
             backend_primary: "codex".to_string(),
             backend_fallback: "claude".to_string(),
+            backend_phase_routing: default_backend_phase_routing(),
+            backend_task_type_routing: default_backend_task_type_routing(),
+
+            agent_enabled: false,
+            agent_mode: "single_orchestrator".to_string(),
+            agent_review_policy: "high_risk".to_string(),
+            agent_explain_level: "compact".to_string(),
+
+            execution_parallel: 2,
+            parallel_enabled: true,
+            parallel_conflict_check: true,
+            scheduler_enabled: true,
+            scheduler_max_parallel: 2,
 
             safe_backlog_enabled: true,
             safe_backlog_trigger_no_progress_rounds: 3,
@@ -207,6 +235,105 @@ fn yaml_to_string(value: Option<&serde_yaml::Value>, default: &str) -> String {
     }
 }
 
+fn normalize_runtime_engine(value: &str) -> String {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "rust" => "rust".to_string(),
+        _ => "rust".to_string(),
+    }
+}
+
+fn default_backend_phase_routing() -> HashMap<String, String> {
+    HashMap::from([
+        ("UNDERSTAND".to_string(), "codex".to_string()),
+        ("INITIALIZE".to_string(), "codex".to_string()),
+        ("ANALYZE".to_string(), "codex".to_string()),
+        ("DECOMPOSE".to_string(), "codex".to_string()),
+        ("EXECUTE".to_string(), "claude".to_string()),
+        ("VERIFY".to_string(), "codex".to_string()),
+        ("REVIEW".to_string(), "codex".to_string()),
+        ("COMMIT".to_string(), "claude".to_string()),
+        ("DELIVER".to_string(), "claude".to_string()),
+    ])
+}
+
+fn default_backend_task_type_routing() -> HashMap<String, String> {
+    HashMap::from([
+        ("implementation".to_string(), "claude".to_string()),
+        ("verification".to_string(), "claude".to_string()),
+        ("design".to_string(), "codex".to_string()),
+        ("research".to_string(), "codex".to_string()),
+        ("documentation".to_string(), "claude".to_string()),
+        ("configuration".to_string(), "claude".to_string()),
+    ])
+}
+
+fn normalize_backend_name(value: &str) -> Option<String> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "codex" => Some("codex".to_string()),
+        "claude" => Some("claude".to_string()),
+        _ => None,
+    }
+}
+
+fn normalize_agent_mode(value: &str) -> String {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "single_orchestrator" | "role_handoff" => value.trim().to_ascii_lowercase(),
+        _ => "single_orchestrator".to_string(),
+    }
+}
+
+fn normalize_agent_review_policy(value: &str) -> String {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "high_risk" | "always" | "never" => value.trim().to_ascii_lowercase(),
+        _ => "high_risk".to_string(),
+    }
+}
+
+fn normalize_agent_explain_level(value: &str) -> String {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "compact" | "verbose" | "off" => value.trim().to_ascii_lowercase(),
+        _ => "compact".to_string(),
+    }
+}
+
+fn yaml_mapping(value: Option<&serde_yaml::Value>) -> Option<&serde_yaml::Mapping> {
+    match value {
+        Some(serde_yaml::Value::Mapping(map)) => Some(map),
+        _ => None,
+    }
+}
+
+fn merge_backend_map(
+    defaults: &HashMap<String, String>,
+    raw_map: Option<&serde_yaml::Value>,
+    uppercase_keys: bool,
+) -> HashMap<String, String> {
+    let mut merged = defaults.clone();
+    let Some(map) = yaml_mapping(raw_map) else {
+        return merged;
+    };
+
+    for (key, value) in map {
+        let Some(key_raw) = key.as_str() else {
+            continue;
+        };
+        let value_raw = yaml_to_string(Some(value), "");
+        let Some(backend) = normalize_backend_name(&value_raw) else {
+            continue;
+        };
+        let normalized_key = if uppercase_keys {
+            key_raw.trim().to_ascii_uppercase()
+        } else {
+            key_raw.trim().to_ascii_lowercase()
+        };
+        if !normalized_key.is_empty() {
+            merged.insert(normalized_key, backend);
+        }
+    }
+
+    merged
+}
+
 pub fn load_flat_config(fusion_dir: &Path) -> FlatConfig {
     let cfg_path = fusion_dir.join("config.yaml");
     let mut cfg = FlatConfig::default();
@@ -221,15 +348,93 @@ pub fn load_flat_config(fusion_dir: &Path) -> FlatConfig {
         yaml_get(&raw, &["runtime", "compat_mode"]),
         cfg.runtime_compat_mode,
     );
+    cfg.runtime_engine = normalize_runtime_engine(&yaml_to_string(
+        yaml_get(&raw, &["runtime", "engine"]),
+        &cfg.runtime_engine,
+    ));
 
-    cfg.backend_primary = yaml_to_string(
+    cfg.backend_primary = normalize_backend_name(&yaml_to_string(
         yaml_get(&raw, &["backends", "primary"]),
         &cfg.backend_primary,
-    );
-    cfg.backend_fallback = yaml_to_string(
+    ))
+    .unwrap_or(cfg.backend_primary.clone());
+    cfg.backend_fallback = normalize_backend_name(&yaml_to_string(
         yaml_get(&raw, &["backends", "fallback"]),
         &cfg.backend_fallback,
+    ))
+    .unwrap_or(cfg.backend_fallback.clone());
+    if cfg.backend_fallback == cfg.backend_primary {
+        cfg.backend_fallback = if cfg.backend_primary == "codex" {
+            "claude".to_string()
+        } else {
+            "codex".to_string()
+        };
+    }
+
+    let phase_routing_raw =
+        if yaml_mapping(yaml_get(&raw, &["backends", "phase_routing"])).is_some() {
+            yaml_get(&raw, &["backends", "phase_routing"])
+        } else if yaml_mapping(yaml_get(&raw, &["backend_routing", "phase_routing"])).is_some() {
+            yaml_get(&raw, &["backend_routing", "phase_routing"])
+        } else if yaml_mapping(yaml_get(&raw, &["backend_routing", "phase"])).is_some() {
+            yaml_get(&raw, &["backend_routing", "phase"])
+        } else {
+            None
+        };
+
+    let task_type_routing_raw = if yaml_mapping(yaml_get(&raw, &["backends", "task_type_routing"]))
+        .is_some()
+    {
+        yaml_get(&raw, &["backends", "task_type_routing"])
+    } else if yaml_mapping(yaml_get(&raw, &["backend_routing", "task_type_routing"])).is_some() {
+        yaml_get(&raw, &["backend_routing", "task_type_routing"])
+    } else if yaml_mapping(yaml_get(&raw, &["backend_routing", "task_type"])).is_some() {
+        yaml_get(&raw, &["backend_routing", "task_type"])
+    } else {
+        None
+    };
+
+    cfg.backend_phase_routing =
+        merge_backend_map(&cfg.backend_phase_routing, phase_routing_raw, true);
+    cfg.backend_task_type_routing =
+        merge_backend_map(&cfg.backend_task_type_routing, task_type_routing_raw, false);
+
+    cfg.agent_enabled = yaml_to_bool(yaml_get(&raw, &["agents", "enabled"]), cfg.agent_enabled);
+    cfg.agent_mode = normalize_agent_mode(&yaml_to_string(
+        yaml_get(&raw, &["agents", "mode"]),
+        &cfg.agent_mode,
+    ));
+    cfg.agent_review_policy = normalize_agent_review_policy(&yaml_to_string(
+        yaml_get(&raw, &["agents", "review_policy"]),
+        &cfg.agent_review_policy,
+    ));
+    cfg.agent_explain_level = normalize_agent_explain_level(&yaml_to_string(
+        yaml_get(&raw, &["agents", "explain_level"]),
+        &cfg.agent_explain_level,
+    ));
+
+    cfg.execution_parallel = yaml_to_i64(
+        yaml_get(&raw, &["execution", "parallel"]),
+        cfg.execution_parallel,
+    )
+    .max(1);
+    cfg.parallel_enabled = yaml_to_bool(
+        yaml_get(&raw, &["parallel", "enabled"]),
+        cfg.parallel_enabled,
     );
+    cfg.parallel_conflict_check = yaml_to_bool(
+        yaml_get(&raw, &["parallel", "conflict_check"]),
+        cfg.parallel_conflict_check,
+    );
+    cfg.scheduler_enabled = yaml_to_bool(
+        yaml_get(&raw, &["scheduler", "enabled"]),
+        cfg.scheduler_enabled,
+    );
+    cfg.scheduler_max_parallel = yaml_to_i64(
+        yaml_get(&raw, &["scheduler", "max_parallel"]),
+        cfg.scheduler_max_parallel,
+    )
+    .max(1);
 
     cfg.safe_backlog_enabled = yaml_to_bool(
         yaml_get(&raw, &["safe_backlog", "enabled"]),
@@ -481,6 +686,43 @@ mod tests {
     }
 
     #[test]
+    fn test_load_flat_config_parses_backend_routing_maps() {
+        let dir = tempdir().expect("tempdir");
+        let config = dir.path().join("config.yaml");
+        write_text(
+            &config,
+            "backends:
+  primary: claude
+  fallback: codex
+backend_routing:
+  phase_routing:
+    REVIEW: claude
+  task_type_routing:
+    research: claude
+",
+        )
+        .expect("write config");
+
+        let cfg = load_flat_config(dir.path());
+        assert_eq!(cfg.backend_primary, "claude");
+        assert_eq!(cfg.backend_fallback, "codex");
+        assert_eq!(
+            cfg.backend_phase_routing.get("REVIEW").map(String::as_str),
+            Some("claude")
+        );
+        assert_eq!(
+            cfg.backend_phase_routing.get("EXECUTE").map(String::as_str),
+            Some("claude")
+        );
+        assert_eq!(
+            cfg.backend_task_type_routing
+                .get("research")
+                .map(String::as_str),
+            Some("claude")
+        );
+    }
+
+    #[test]
     fn test_dependency_report_roundtrip() {
         let dir = tempdir().expect("tempdir");
         let report = DependencyReport {
@@ -536,6 +778,33 @@ mod tests {
     }
 
     #[test]
+    fn test_load_flat_config_normalizes_legacy_runtime_engine() {
+        let dir = tempdir().expect("tempdir");
+        write_text(
+            &dir.path().join("config.yaml"),
+            "runtime:
+  enabled: true
+  engine: LEGACY
+",
+        )
+        .expect("write config");
+
+        let cfg = load_flat_config(dir.path());
+        assert_eq!(cfg.runtime_engine, "rust");
+
+        write_text(
+            &dir.path().join("config.yaml"),
+            "runtime:
+  enabled: true
+  engine: unknown
+",
+        )
+        .expect("write config");
+        let cfg = load_flat_config(dir.path());
+        assert_eq!(cfg.runtime_engine, "rust");
+    }
+
+    #[test]
     fn test_load_flat_config_parses_safe_backlog() {
         let dir = tempdir().expect("tempdir");
         write_text(
@@ -547,5 +816,38 @@ mod tests {
         let cfg = load_flat_config(dir.path());
         assert!(cfg.safe_backlog_enabled);
         assert_eq!(cfg.safe_backlog_trigger_no_progress_rounds, 5);
+    }
+
+    #[test]
+    fn test_load_flat_config_parses_agents() {
+        let dir = tempdir().expect("tempdir");
+        write_text(
+            &dir.path().join("config.yaml"),
+            "agents:\n  enabled: true\n  mode: single_orchestrator\n  review_policy: high_risk\n  explain_level: compact\n",
+        )
+        .expect("write config");
+
+        let cfg = load_flat_config(dir.path());
+        assert!(cfg.agent_enabled);
+        assert_eq!(cfg.agent_mode, "single_orchestrator");
+        assert_eq!(cfg.agent_review_policy, "high_risk");
+        assert_eq!(cfg.agent_explain_level, "compact");
+    }
+
+    #[test]
+    fn test_load_flat_config_parses_orchestrator_parallel_settings() {
+        let dir = tempdir().expect("tempdir");
+        write_text(
+            &dir.path().join("config.yaml"),
+            "execution:\n  parallel: 3\nparallel:\n  enabled: true\n  conflict_check: false\nscheduler:\n  enabled: true\n  max_parallel: 2\n",
+        )
+        .expect("write config");
+
+        let cfg = load_flat_config(dir.path());
+        assert_eq!(cfg.execution_parallel, 3);
+        assert!(cfg.parallel_enabled);
+        assert!(!cfg.parallel_conflict_check);
+        assert!(cfg.scheduler_enabled);
+        assert_eq!(cfg.scheduler_max_parallel, 2);
     }
 }

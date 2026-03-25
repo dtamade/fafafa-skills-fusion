@@ -6,7 +6,7 @@
 
 **Architecture:** 继续测试先行（RED→GREEN→REFACTOR）。每个脚本先加一个失败测试验证“未知参数应拒绝”，再做最小 shell 改动（`-h|--help` + unknown option error），最后执行 targeted + full 回归。
 
-**Tech Stack:** Bash, Python (pytest), Markdown。
+**Tech Stack:** Bash, Markdown。
 
 ---
 
@@ -14,7 +14,7 @@
 
 **Priority:** P0  
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_control_script_validation.py`
+- Modify: `scripts/runtime/tests/test_fusion_control_script_validation`
 - Modify: `scripts/fusion-pause.sh`
 
 **Step 1: Write the failing test**
@@ -23,7 +23,7 @@
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_control_script_validation.py::TestFusionPauseValidation::test_pause_rejects_unknown_option`  
+测试记录： `scripts/runtime/tests/test_fusion_control_script_validation::TestFusionPauseValidation::test_pause_rejects_unknown_option`  
 Expected: FAIL（当前会忽略参数并执行）。
 
 **Step 3: Write minimal implementation**
@@ -34,7 +34,8 @@ Expected: FAIL（当前会忽略参数并执行）。
 
 **Step 4: Run test to verify it passes**
 
-Run: `bash -n scripts/fusion-pause.sh && pytest -q scripts/runtime/tests/test_fusion_control_script_validation.py::TestFusionPauseValidation::test_pause_rejects_unknown_option`  
+Run: `bash -n scripts/fusion-pause.sh`  
+测试记录： `scripts/runtime/tests/test_fusion_control_script_validation::TestFusionPauseValidation::test_pause_rejects_unknown_option`  
 Expected: PASS。
 
 ---
@@ -43,7 +44,7 @@ Expected: PASS。
 
 **Priority:** P0  
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_control_script_validation.py`
+- Modify: `scripts/runtime/tests/test_fusion_control_script_validation`
 - Modify: `scripts/fusion-cancel.sh`
 
 **Step 1: Write the failing test**
@@ -52,7 +53,7 @@ Expected: PASS。
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_control_script_validation.py::TestFusionCancelValidation::test_cancel_rejects_unknown_option`  
+测试记录： `scripts/runtime/tests/test_fusion_control_script_validation::TestFusionCancelValidation::test_cancel_rejects_unknown_option`  
 Expected: FAIL。
 
 **Step 3: Write minimal implementation**
@@ -63,7 +64,8 @@ Expected: FAIL。
 
 **Step 4: Run test to verify it passes**
 
-Run: `bash -n scripts/fusion-cancel.sh && pytest -q scripts/runtime/tests/test_fusion_control_script_validation.py::TestFusionCancelValidation::test_cancel_rejects_unknown_option`  
+Run: `bash -n scripts/fusion-cancel.sh`  
+测试记录： `scripts/runtime/tests/test_fusion_control_script_validation::TestFusionCancelValidation::test_cancel_rejects_unknown_option`  
 Expected: PASS。
 
 ---
@@ -72,7 +74,7 @@ Expected: PASS。
 
 **Priority:** P1  
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_control_script_validation.py`
+- Modify: `scripts/runtime/tests/test_fusion_control_script_validation`
 - Modify: `scripts/fusion-continue.sh`
 
 **Step 1: Write the failing test**
@@ -81,7 +83,7 @@ Expected: PASS。
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_control_script_validation.py::TestFusionContinueValidation::test_continue_rejects_unknown_option`  
+测试记录： `scripts/runtime/tests/test_fusion_control_script_validation::TestFusionContinueValidation::test_continue_rejects_unknown_option`  
 Expected: FAIL（当前会静默忽略参数）。
 
 **Step 3: Write minimal implementation**
@@ -92,7 +94,8 @@ Expected: FAIL（当前会静默忽略参数）。
 
 **Step 4: Run test to verify it passes**
 
-Run: `bash -n scripts/fusion-continue.sh && pytest -q scripts/runtime/tests/test_fusion_control_script_validation.py::TestFusionContinueValidation::test_continue_rejects_unknown_option`  
+Run: `bash -n scripts/fusion-continue.sh`  
+测试记录： `scripts/runtime/tests/test_fusion_control_script_validation::TestFusionContinueValidation::test_continue_rejects_unknown_option`  
 Expected: PASS。
 
 ---
@@ -100,5 +103,7 @@ Expected: PASS。
 ## Final Regression (Round 4)
 
 Run:
-- `pytest -q scripts/runtime/tests/test_fusion_control_script_validation.py scripts/runtime/tests/test_fusion_start_script.py scripts/runtime/tests/test_docs_freshness.py scripts/runtime/tests/test_fusion_hook_doctor_script.py scripts/runtime/tests/test_fusion_status_script.py`
-- `pytest -q`
+- 测试记录： `scripts/runtime/tests/test_fusion_control_script_validation scripts/runtime/tests/test_fusion_start_script scripts/runtime/tests/test_docs_freshness scripts/runtime/tests/test_fusion_hook_doctor_script scripts/runtime/tests/test_fusion_status_script`
+- 全量验证记录
+
+> 归档说明：本文保留其历史上下文。当前行为请以 Rust 与 Shell 契约为准。

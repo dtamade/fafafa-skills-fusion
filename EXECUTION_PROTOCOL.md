@@ -10,6 +10,10 @@
 
 **统一使用 `codeagent-wrapper`**（支持多后端，按 phase/task-type 路由，失败自动降级）：
 
+这里只描述 provider 层调用；控制面入口仍是 `/fusion`、对应的 Shell thin wrapper，以及 `fusion-bridge`。
+
+下面的 `codeagent-wrapper ... resume <SESSION_ID>` 片段表示后端内部沿用同一会话的调用方式，不是用户恢复入口；用户恢复入口仍是 `/fusion resume`。
+
 ```bash
 # 主调用（由路由决定）
 codeagent-wrapper --backend <ROUTED_BACKEND> - "$PWD" <<'EOF'
@@ -28,26 +32,27 @@ EOF
 ```
 
 **Bash 调用参数**：
+
 - `timeout: 7200000` (固定 2 小时)
 - `description: "<简短描述>"`
 
 ### 任务类型与执行流程
 
-| 任务类型 | 执行流程 | 说明 |
-|----------|----------|------|
+| 任务类型         | 执行流程                      | 说明                 |
+| ---------------- | ----------------------------- | -------------------- |
 | `implementation` | 完整 TDD (RED→GREEN→REFACTOR) | 需要写测试的功能实现 |
-| `verification` | 完整 TDD | 测试相关任务 |
-| `design` | 直接执行 | API 设计、架构设计 |
-| `documentation` | 直接执行 | 文档生成 |
-| `configuration` | 直接执行 | 配置修改 |
-| `research` | 直接执行 | 代码库研究 |
+| `verification`   | 完整 TDD                      | 测试相关任务         |
+| `design`         | 直接执行                      | API 设计、架构设计   |
+| `documentation`  | 直接执行                      | 文档生成             |
+| `configuration`  | 直接执行                      | 配置修改             |
+| `research`       | 直接执行                      | 代码库研究           |
 
 ### 默认路由（v2.6.3）
 
-| 路由维度 | 默认 `codex` | 默认 `claude` |
-|----------|---------------|----------------|
-| 阶段路由 | UNDERSTAND / INITIALIZE / ANALYZE / DECOMPOSE / VERIFY / REVIEW | EXECUTE / COMMIT / DELIVER |
-| 任务类型路由（EXECUTE） | design / research | implementation / verification / documentation / configuration |
+| 路由维度                | 默认 `codex`                                                    | 默认 `claude`                                                 |
+| ----------------------- | --------------------------------------------------------------- | ------------------------------------------------------------- |
+| 阶段路由                | UNDERSTAND / INITIALIZE / ANALYZE / DECOMPOSE / VERIFY / REVIEW | EXECUTE / COMMIT / DELIVER                                    |
+| 任务类型路由（EXECUTE） | design / research                                               | implementation / verification / documentation / configuration |
 
 可在 `.fusion/config.yaml` 的 `backend_routing` 中覆盖。
 
@@ -59,7 +64,7 @@ EOF
 
 ### 0.1 检查跳过标志
 
-```python
+```text
 # 伪代码
 if "--force" in args or "--yolo" in args:
     log("⚠️ 跳过理解确认（--force）")
@@ -68,7 +73,7 @@ if "--force" in args or "--yolo" in args:
 
 ### 0.2 静默扫描项目
 
-```python
+```text
 context = {
     "tech_stack": detect_tech_stack(),
     "test_framework": detect_test_framework(),
@@ -87,10 +92,10 @@ context = {
 
 ### 0.4 阈值决策（与配置一致）
 
-| 条件 | 默认行为 (`require_confirmation=false`) | 严格模式 (`require_confirmation=true`) |
-|------|------------------------------------------|----------------------------------------|
-| `score >= pass_threshold` | 自动推进到 `INITIALIZE` | 自动推进到 `INITIALIZE` |
-| `score < pass_threshold` | 记录缺失项与假设后继续 | 保持在 `UNDERSTAND`，等待澄清 |
+| 条件                      | 默认行为 (`require_confirmation=false`) | 严格模式 (`require_confirmation=true`) |
+| ------------------------- | --------------------------------------- | -------------------------------------- |
+| `score >= pass_threshold` | 自动推进到 `INITIALIZE`                 | 自动推进到 `INITIALIZE`                |
+| `score < pass_threshold`  | 记录缺失项与假设后继续                  | 保持在 `UNDERSTAND`，等待澄清          |
 
 ### 0.5 配置项
 
@@ -119,15 +124,17 @@ mkdir -p .fusion
 ### 1.2 初始化文件
 
 创建以下文件（使用 templates/ 中的模板）：
+
 - `.fusion/task_plan.md` - 任务计划
 - `.fusion/progress.md` - 进度日志
 - `.fusion/findings.md` - 发现记录
 - `.fusion/sessions.json` - 会话存储
-- `.fusion/config.yaml` - 配置
+- `.fusion/config.yaml` - 由 `templates/config.yaml` 生成的工作区配置
 
 ### 1.3 记录开始
 
 在 `progress.md` 中记录：
+
 ```markdown
 | <timestamp> | INIT | Workflow started | OK | Goal: <用户目标> |
 ```
@@ -199,6 +206,7 @@ Action: Using Claude local for task decomposition
 ### 3.2 解析后端输出
 
 从后端响应中提取：
+
 1. YAML 任务列表（包含每个任务的 type）
 2. SESSION_ID（保存到 sessions.json）
 
@@ -219,6 +227,7 @@ Action: Using Claude local for task decomposition
 ### 4.1 任务调度
 
 按依赖顺序执行任务：
+
 1. 无依赖任务可并行执行（最多 parallel 个）
 2. 有依赖任务等待依赖完成后执行
 
@@ -228,7 +237,7 @@ Action: Using Claude local for task decomposition
 
 #### 4.2.0 检查任务类型
 
-```python
+```text
 # 伪代码
 if task.type in ['implementation', 'verification']:
     execute_tdd_flow(task)  # 完整 TDD 流程
@@ -395,14 +404,17 @@ Action: Switching to fallback backend
 每个任务完成后更新：
 
 **task_plan.md**:
+
 ```markdown
 ### Task N: <task_id> [COMPLETED]
+
 - Duration: Xmin
 - Session: <session_id>
 - Output: <files created/modified>
 ```
 
 **progress.md**:
+
 ```markdown
 | <timestamp> | EXECUTE | Task <task_id> completed | OK | TDD: RED→GREEN→REFACTOR |
 ```
@@ -414,15 +426,19 @@ Action: Switching to fallback backend
 ### 5.1 运行完整测试套件
 
 ```bash
-# 自动检测测试命令
+# 自动检测测试命令（示意）
 if [ -f "package.json" ]; then
   npm test
-elif [ -f "pytest.ini" ] || [ -d "tests" ]; then
-  pytest
+elif [ -f "Cargo.toml" ]; then
+  cargo test --release
 elif [ -f "go.mod" ]; then
   go test ./...
+else
+  echo "Run the project-appropriate verification command"
 fi
 ```
+
+如果当前执行协议里的验证基线、控制面入口，或仓库/runtime 契约发生变化，请同步更新相关活文档，以及 `rust/crates/fusion-cli/tests/repo_contract.rs` / `rust/crates/fusion-cli/tests/shell_contract.rs`。
 
 ### 5.2 检查测试覆盖率
 
@@ -504,29 +520,35 @@ Fusion workflow completed.
 ## Fusion Workflow Complete ✅
 
 ### Goal
+
 <原始目标>
 
 ### Summary
+
 - Duration: X minutes
 - Tasks completed: N/N
 - Tests: X passed
 - Commits: N
 
 ### Changes Made
+
 | File | Action | Description |
-|------|--------|-------------|
-| ... | ... | ... |
+| ---- | ------ | ----------- |
+| ...  | ...    | ...         |
 
 ### Verification
+
 - All tests passing: ✅
 - Code review: APPROVED
 
 ### Git
+
 - Branch: fusion/<goal-slug>
 - Commits: N
 - Ready for: merge / PR
 
 ### Recommendations
+
 1. <建议1>
 2. <建议2>
 ```
@@ -534,13 +556,16 @@ Fusion workflow completed.
 ### 8.2 更新最终状态
 
 **task_plan.md**:
+
 ```markdown
 ## Status
+
 - Current Phase: DELIVER (8/8) ✅
 - All tasks completed
 ```
 
 **progress.md**:
+
 ```markdown
 | <timestamp> | DELIVER | Workflow completed | OK | All N tasks done |
 ```
@@ -601,9 +626,9 @@ Fusion workflow completed.
 ### 会话恢复 (/fusion resume)
 
 1. 读取 `.fusion/sessions.json`
-2. 找到最后一个 `in_progress` 任务
-3. 使用 `codeagent-wrapper --backend codex resume <session_id>` 继续
-4. 从断点继续执行
+2. 通过 `scripts/fusion-resume.sh` 委托 `fusion-bridge resume --fusion-dir .fusion`
+3. Rust 控制面按当前状态（`paused` / `stuck` / `in_progress`）恢复 workflow，并内部复用 `run`
+4. 如果需要补回 Claude 会话消息、任务计划或 git diff 漂移，再执行 `scripts/fusion-catchup.sh`
 
 ---
 

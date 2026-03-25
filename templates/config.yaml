@@ -25,6 +25,15 @@ backend_routing:
     documentation: claude
     configuration: claude
 
+# Agent Spine 配置（Stage 1）
+agents:
+  enabled: false
+  mode: single_orchestrator   # default; use role_handoff for planner -> coder -> reviewer baton passing
+  review_policy: high_risk    # high_risk | always | never
+  explain_level: compact      # off | compact | verbose on current status surfaces
+# Task review gate state lives in `.fusion/task_plan.md`:
+# Review-Status: none | pending | approved | changes_requested
+
 # 执行配置
 execution:
   parallel: 2              # 最大并行任务数
@@ -40,8 +49,8 @@ parallel:
 # Runtime 配置
 runtime:
   enabled: true
-  compat_mode: true
-  engine: "python"        # python | rust
+  compat_mode: true        # Keep Shell fallback available when bridge is skipped
+  engine: "rust"           # rust primary; single-engine runtime
   version: "2.6.3"
 
 # Understand 阶段策略
@@ -54,7 +63,7 @@ understand:
 # TDD 配置
 tdd:
   enabled: true
-  test_command: null       # 自动检测: npm test, pytest, go test 等
+  test_command: null       # 自动检测: npm test, cargo test, go test 等
   coverage_threshold: 80   # 覆盖率阈值 (%)
 
 # Git 配置

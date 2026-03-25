@@ -6,7 +6,7 @@
 
 **Architecture:** 延续测试先行（RED→GREEN→REFACTOR）：先新增失败测试锁定 `guardian_status` 与 `guardian_init` 的缺口，再做最小 shell 实现修复，最后执行 targeted + full 回归。
 
-**Tech Stack:** Bash, Python (pytest), Markdown。
+**Tech Stack:** Bash, Markdown。
 
 ---
 
@@ -14,7 +14,7 @@
 
 **Priority:** P0  
 **Files:**
-- Create: `scripts/runtime/tests/test_loop_guardian_script.py`
+- Create: `scripts/runtime/tests/test_loop_guardian_script`
 - Modify: `scripts/loop-guardian.sh`
 
 **Step 1: Write the failing test**
@@ -23,7 +23,7 @@
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_loop_guardian_script.py::TestLoopGuardianStatus::test_status_uses_loaded_config_thresholds`  
+测试记录： `scripts/runtime/tests/test_loop_guardian_script::TestLoopGuardianStatus::test_status_uses_loaded_config_thresholds`  
 Expected: FAIL（当前显示默认阈值 50/6/3/3）。
 
 **Step 3: Write minimal implementation**
@@ -32,7 +32,7 @@ Expected: FAIL（当前显示默认阈值 50/6/3/3）。
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_loop_guardian_script.py::TestLoopGuardianStatus::test_status_uses_loaded_config_thresholds`  
+测试记录： `scripts/runtime/tests/test_loop_guardian_script::TestLoopGuardianStatus::test_status_uses_loaded_config_thresholds`  
 Expected: PASS。
 
 ---
@@ -41,7 +41,7 @@ Expected: PASS。
 
 **Priority:** P0  
 **Files:**
-- Modify: `scripts/runtime/tests/test_loop_guardian_script.py`
+- Modify: `scripts/runtime/tests/test_loop_guardian_script`
 - Modify: `scripts/loop-guardian.sh`
 
 **Step 1: Write the failing test**
@@ -50,7 +50,7 @@ Expected: PASS。
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_loop_guardian_script.py::TestLoopGuardianInit::test_init_creates_fusion_dir_when_missing`  
+测试记录： `scripts/runtime/tests/test_loop_guardian_script::TestLoopGuardianInit::test_init_creates_fusion_dir_when_missing`  
 Expected: FAIL（当前报 `no such file or directory`）。
 
 **Step 3: Write minimal implementation**
@@ -59,7 +59,7 @@ Expected: FAIL（当前报 `no such file or directory`）。
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_loop_guardian_script.py::TestLoopGuardianInit::test_init_creates_fusion_dir_when_missing`  
+测试记录： `scripts/runtime/tests/test_loop_guardian_script::TestLoopGuardianInit::test_init_creates_fusion_dir_when_missing`  
 Expected: PASS。
 
 ---
@@ -68,7 +68,7 @@ Expected: PASS。
 
 **Priority:** P1  
 **Files:**
-- Modify: `scripts/runtime/tests/test_loop_guardian_script.py`
+- Modify: `scripts/runtime/tests/test_loop_guardian_script`
 - Modify: `scripts/loop-guardian.sh`
 
 **Step 1: Write the failing test**
@@ -77,7 +77,7 @@ Expected: PASS。
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_loop_guardian_script.py::TestLoopGuardianStatus::test_status_includes_state_and_walltime_thresholds`  
+测试记录： `scripts/runtime/tests/test_loop_guardian_script::TestLoopGuardianStatus::test_status_includes_state_and_walltime_thresholds`  
 Expected: FAIL（当前无这两行）。
 
 **Step 3: Write minimal implementation**
@@ -86,7 +86,7 @@ Expected: FAIL（当前无这两行）。
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_loop_guardian_script.py::TestLoopGuardianStatus::test_status_includes_state_and_walltime_thresholds`  
+测试记录： `scripts/runtime/tests/test_loop_guardian_script::TestLoopGuardianStatus::test_status_includes_state_and_walltime_thresholds`  
 Expected: PASS。
 
 ---
@@ -94,5 +94,8 @@ Expected: PASS。
 ## Final Regression (Round 5)
 
 Run:
-- `pytest -q scripts/runtime/tests/test_loop_guardian_script.py scripts/runtime/tests/test_fusion_control_script_validation.py scripts/runtime/tests/test_fusion_start_script.py scripts/runtime/tests/test_docs_freshness.py scripts/runtime/tests/test_fusion_hook_doctor_script.py scripts/runtime/tests/test_fusion_status_script.py`
-- `pytest -q`
+- 测试记录： `scripts/runtime/tests/test_loop_guardian_script scripts/runtime/tests/test_fusion_control_script_validation scripts/runtime/tests/test_fusion_start_script scripts/runtime/tests/test_docs_freshness scripts/runtime/tests/test_fusion_hook_doctor_script scripts/runtime/tests/test_fusion_status_script`
+- 全量验证记录
+
+> 归档说明：本文保留其历史上下文。当前行为请以 Rust 与 Shell 契约为准。
+

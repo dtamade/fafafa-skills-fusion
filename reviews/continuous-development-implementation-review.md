@@ -12,7 +12,7 @@
 本次审查涵盖了 Fusion 持续自主开发机制的完整实现，包括：
 1. Hook stdin 处理修复
 2. Stop hook 自动注入 safe_backlog 任务
-3. Python runtime adapter 集成
+3. 旧 runtime adapter 集成
 4. 测试验证
 
 ---
@@ -24,7 +24,7 @@
 **修改文件**:
 - `scripts/fusion-pretool.sh`
 - `scripts/fusion-posttool.sh`
-- `scripts/runtime/tests/test_hook_stdin_handling.py`
+- `scripts/runtime/tests/test_hook_stdin_handling`
 - `reviews/hook-stdin-fix-review.md`
 - `reviews/regression-test-checklist.md`
 
@@ -69,15 +69,15 @@
 ### Commit 4: feat(compat_v2): auto-inject safe_backlog in stop-guard adapter (bf72c4c)
 
 **修改文件**:
-- `scripts/runtime/compat_v2.py`
+- `scripts/runtime/compat_v2`
 
 **关键修改**:
-- 在 Python runtime adapter 中实现 safe_backlog 自动注入
+- 在旧 runtime adapter 中实现 safe_backlog 自动注入
 - 与 Shell 实现保持一致
-- 优先使用 Python adapter
+- 优先使用旧 runtime adapter
 
 **审查结论**: ✅ 通过
-- 完成了双路径实现（Shell + Python）
+- 完成了双路径实现（Shell + 旧 runtime）
 - 保证了功能的完整性
 
 ---
@@ -118,8 +118,8 @@
 ### 优点
 
 1. **架构清晰**
-   - Shell 和 Python 双路径实现
-   - 优先使用 Python adapter，Shell 作为 fallback
+   - Shell 和旧 runtime 双路径实现
+   - 优先使用旧 runtime adapter，Shell 作为 fallback
    - 逻辑分层清晰
 
 2. **错误处理完善**
@@ -146,8 +146,8 @@
 
 2. **性能优化**
    - Pretool 执行时间 115ms，超过 50ms 目标
-   - 主要开销在 Python runtime adapter 调用
-   - 可以考虑优化 Python 启动时间
+   - 主要开销在旧 runtime adapter 调用
+   - 可以考虑优化旧 runtime 启动时间
 
 3. **测试失败**
    - 1 个测试失败（test_force_mode_upgrades_relative_hook_paths_and_prints_restart_hint）
@@ -198,8 +198,8 @@
    - 更新测试期望或修复实现
 
 3. **性能优化**
-   - 考虑缓存 Python runtime adapter
-   - 优化 Python 启动时间
+   - 考虑缓存旧 runtime adapter
+   - 优化旧 runtime 启动时间
 
 ### 长期改进
 
@@ -264,3 +264,5 @@
 **审查人签名**: reviewer
 **审查状态**: APPROVED ✅
 **审查时间**: 2026-02-14T13:04:00Z
+
+> Archive note: this review keeps its historical context. For current behavior, use the Rust and shell contracts.

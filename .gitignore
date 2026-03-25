@@ -2,9 +2,12 @@
 
 # Fusion working directory
 .fusion/
-__pycache__/
+/findings.md
+/progress.md
+/task_plan.md
 
 rust/target/
+rust/.cargo-codex/
 
 .claude/settings.json
 .claude/settings.local.json

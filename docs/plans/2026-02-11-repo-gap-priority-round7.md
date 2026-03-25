@@ -6,7 +6,7 @@
 
 **Architecture:** 严格 RED→GREEN→REFACTOR。按参数风险优先级处理：先修 `--top` 非法数值，再修 `--root` 缺失值，最后修 `--top` 缺失值。每步都先写失败测试，再做最小实现。
 
-**Tech Stack:** Bash, Python (pytest), Markdown。
+**Tech Stack:** Bash, Markdown。
 
 ---
 
@@ -14,7 +14,7 @@
 
 **Priority:** P0  
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_achievements_script.py`
+- Modify: `scripts/runtime/tests/test_fusion_achievements_script`
 - Modify: `scripts/fusion-achievements.sh`
 
 **Step 1: Write the failing test**
@@ -23,7 +23,7 @@
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_achievements_script.py::TestFusionAchievementsScript::test_rejects_non_numeric_top_value`  
+测试记录： `scripts/runtime/tests/test_fusion_achievements_script::TestFusionAchievementsScript::test_rejects_non_numeric_top_value`  
 Expected: FAIL（当前返回 0 并在 stderr 出现 head 错误）。
 
 **Step 3: Write minimal implementation**
@@ -32,7 +32,7 @@ Expected: FAIL（当前返回 0 并在 stderr 出现 head 错误）。
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_achievements_script.py::TestFusionAchievementsScript::test_rejects_non_numeric_top_value`  
+测试记录： `scripts/runtime/tests/test_fusion_achievements_script::TestFusionAchievementsScript::test_rejects_non_numeric_top_value`  
 Expected: PASS。
 
 ---
@@ -41,7 +41,7 @@ Expected: PASS。
 
 **Priority:** P0  
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_achievements_script.py`
+- Modify: `scripts/runtime/tests/test_fusion_achievements_script`
 - Modify: `scripts/fusion-achievements.sh`
 
 **Step 1: Write the failing test**
@@ -50,7 +50,7 @@ Expected: PASS。
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_achievements_script.py::TestFusionAchievementsScript::test_rejects_missing_root_value`  
+测试记录： `scripts/runtime/tests/test_fusion_achievements_script::TestFusionAchievementsScript::test_rejects_missing_root_value`  
 Expected: FAIL（当前返回 0）。
 
 **Step 3: Write minimal implementation**
@@ -59,7 +59,7 @@ Expected: FAIL（当前返回 0）。
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_achievements_script.py::TestFusionAchievementsScript::test_rejects_missing_root_value`  
+测试记录： `scripts/runtime/tests/test_fusion_achievements_script::TestFusionAchievementsScript::test_rejects_missing_root_value`  
 Expected: PASS。
 
 ---
@@ -68,7 +68,7 @@ Expected: PASS。
 
 **Priority:** P1  
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_achievements_script.py`
+- Modify: `scripts/runtime/tests/test_fusion_achievements_script`
 - Modify: `scripts/fusion-achievements.sh`
 
 **Step 1: Write the failing test**
@@ -77,7 +77,7 @@ Expected: PASS。
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_achievements_script.py::TestFusionAchievementsScript::test_rejects_missing_top_value`  
+测试记录： `scripts/runtime/tests/test_fusion_achievements_script::TestFusionAchievementsScript::test_rejects_missing_top_value`  
 Expected: FAIL（当前默认回落到 10 并返回 0）。
 
 **Step 3: Write minimal implementation**
@@ -86,7 +86,7 @@ Expected: FAIL（当前默认回落到 10 并返回 0）。
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_achievements_script.py::TestFusionAchievementsScript::test_rejects_missing_top_value`  
+测试记录： `scripts/runtime/tests/test_fusion_achievements_script::TestFusionAchievementsScript::test_rejects_missing_top_value`  
 Expected: PASS。
 
 ---
@@ -94,5 +94,8 @@ Expected: PASS。
 ## Final Regression (Round 7)
 
 Run:
-- `pytest -q scripts/runtime/tests/test_fusion_achievements_script.py scripts/runtime/tests/test_fusion_start_script.py scripts/runtime/tests/test_loop_guardian_script.py scripts/runtime/tests/test_fusion_control_script_validation.py scripts/runtime/tests/test_docs_freshness.py scripts/runtime/tests/test_fusion_hook_doctor_script.py scripts/runtime/tests/test_fusion_status_script.py`
-- `pytest -q`
+- 测试记录： `scripts/runtime/tests/test_fusion_achievements_script scripts/runtime/tests/test_fusion_start_script scripts/runtime/tests/test_loop_guardian_script scripts/runtime/tests/test_fusion_control_script_validation scripts/runtime/tests/test_docs_freshness scripts/runtime/tests/test_fusion_hook_doctor_script scripts/runtime/tests/test_fusion_status_script`
+- 全量验证记录
+
+> 归档说明：本文保留其历史上下文。当前行为请以 Rust 与 Shell 契约为准。
+

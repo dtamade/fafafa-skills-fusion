@@ -2,6 +2,10 @@
 
 > 生成日期: 2026-02-09
 > 来源: Codex 架构分析
+> 状态: 历史阶段路线图（保留当时目标与文件命名）
+> 当前执行真源：当前 live 执行顺序与 GA 收口请以 `docs/V3_GA_EXECUTION_ROADMAP.md` 为准。
+> 说明：本文保留路线图撰写时的阶段性假设；若与当前仓库实现冲突，应以 `README.md`、`README.zh-CN.md`、`docs/CLI_CONTRACT_MATRIX.md`、`rust/README.md` 和实际脚本行为为准。
+> 当前实现注记：Rust / `fusion-bridge` 已是主控制面；Shell 主要保留在 thin wrapper 与 hook 接线；旧 runtime/reference 层已从仓库移除。下文如出现历史 runtime 模块名时，应按历史阶段性口径理解。
 
 ## 总览
 
@@ -21,24 +25,24 @@
 ### 核心交付物
 
 ```
-scripts/runtime/
-├── kernel.py          # 状态机内核
-├── state_machine.py   # FSM 定义 (状态、事件、转移、守卫条件)
-├── session_store.py   # 事件溯源存储 (幂等执行键)
-├── event_bus.py       # 事件总线
-└── compat_v2.py       # v2 兼容适配层
+历史 runtime 模块集（阶段性命名）
+├── kernel             # 状态机内核（历史模块名）
+├── state_machine      # FSM 定义 (状态、事件、转移、守卫条件)
+├── session_store      # 事件溯源存储 (幂等执行键)
+├── event_bus          # 事件总线
+└── 历史兼容适配层      # v2 兼容能力（历史模块名）
 
-docs/
-├── RUNTIME_KERNEL.md
+维护文档
+├── 内核设计文档（历史计划名）
 └── UPGRADE_v2_COMPAT.md
 
 templates/config.yaml  # 增加 runtime.enabled, runtime.compat_mode
 ```
 
 ### 改造点
-- `fusion-stop-guard.sh` → 调用 runtime adapter
-- `fusion-pretool.sh` → 薄适配层
-- `fusion-posttool.sh` → 薄适配层
+- `fusion-stop-guard.sh` → thin wrapper / `fusion-bridge hook stop-guard`
+- `fusion-pretool.sh` → thin wrapper / hook pretool 入口
+- `fusion-posttool.sh` → thin wrapper / hook posttool 入口
 
 ### 最小可验收能力
 - 用户继续用原命令 (`/fusion`、`status`、`resume`)
@@ -57,8 +61,8 @@ templates/config.yaml  # 增加 runtime.enabled, runtime.compat_mode
 ### 风险与缓解
 | 风险 | 缓解措施 |
 |------|----------|
-| Python 启动开销导致 Hook 变慢 | 默认 `compat_mode=true`，runtime 可开关灰度 |
-| 状态 schema 漂移 | 保留 `jq/grep` fallback |
+| 旧实现启动开销导致 Hook 变慢 | 默认 `compat_mode=true`，runtime 可开关灰度 |
+| 状态 schema 漂移 | 保留文本工具兜底路径 |
 
 ---
 
@@ -70,14 +74,14 @@ templates/config.yaml  # 增加 runtime.enabled, runtime.compat_mode
 ### 核心交付物
 
 ```
-scripts/runtime/
-├── task_graph.py        # DAG 任务图编译器 (Kahn 拓扑排序)
-├── scheduler.py         # 并行调度器 (决策管道)
-├── conflict_detector.py # 文件冲突检测 (writeset 交集)
-├── budget_manager.py    # Token/时延预算管理
-├── router.py            # 模型路由 (类型+预算分级)
-├── bench_parallel_sim.py  # 并行模拟验收测试
-└── bench_hook_latency.py  # Hook+Scheduler 性能基准
+历史 runtime 模块集（阶段性命名）
+├── task_graph          # DAG 任务图编译器 (Kahn 拓扑排序)
+├── scheduler           # 并行调度器 (决策管道)
+├── conflict_detector   # 文件冲突检测 (writeset 交集)
+├── budget_manager      # Token/时延预算管理
+├── router              # 模型路由 (类型+预算分级)
+├── 并行模拟验收        # 并行验收测试（历史模块名）
+└── Hook 延迟基准       # Hook+Scheduler 性能基准（历史模块名）
 
 templates/config.yaml    # 新增 scheduler, budget 配置段
 ```
@@ -91,33 +95,24 @@ templates/config.yaml    # 新增 scheduler, budget 配置段
 ### 验收指标
 | 指标 | 目标 | 实际 | 状态 |
 |------|------|------|------|
-| DAG 依赖违规数 | = 0 | 0 | ✅ |
-| 中位加速比 | ≥ 1.4x | 2.00x | ✅ |
-| 冲突回滚率 | ≤ 5% | 4.8% | ✅ |
-| Token 超支率 | ≤ 10% | 6.0% | ✅ |
-| 硬上限突破 | = 0 | 0 | ✅ |
-| 调度决策 p95 | < 200ms | 0.09ms | ✅ |
-| v2.1.0 回归 | 139/139 | 139/139 | ✅ |
+| DAG 依赖违规数 | = 0 | 历史记录达标 | ✅ |
+| 中位加速比 | ≥ 1.4x | 历史记录达标 | ✅ |
+| 冲突回滚率 | ≤ 5% | 历史记录达标 | ✅ |
+| Token 超支率 | ≤ 10% | 历史记录达标 | ✅ |
+| 硬上限突破 | = 0 | 历史记录达标 | ✅ |
+| 调度决策 p95 | < 200ms | 历史记录达标 | ✅ |
+| v2.1.0 回归 | 全量通过 | 历史记录通过 | ✅ |
 
 ### 测试覆盖
-| 组件 | 测试数 | 通过率 |
-|------|--------|--------|
-| FSM + Kernel (v2.1.0) | 139 | 100% |
-| DAG 任务图 | 39 | 100% |
-| 冲突检测 | 15 | 100% |
-| 预算管理 | 24 | 100% |
-| 模型路由 | 12 | 100% |
-| 调度器 | 16 | 100% |
-| 调度器集成 | 23 | 100% |
-| **Total** | **268** | **100%** |
+当时的测试覆盖统计已记录为全绿；当前仓库验证请以 Rust 契约测试与 release 门禁为准。
 
-回归: 60/60 场景 (100%) | 恢复可靠性: 20/20 (100%)
+当时记录中，回归与恢复可靠性均达标。
 
 ### 风险与缓解
 | 风险 | 缓解措施 | 结果 |
 |------|----------|------|
 | 并行导致非确定性 | 先 `scheduler.enabled=false` 灰度 | ✅ 默认串行，灰度可控 |
-| 冲突检测误报 | 支持"一键回退串行" | ✅ 冲突回滚率 4.8% |
+| 冲突检测误报 | 支持"一键回退串行" | ✅ 历史记录达标，风险受控 |
 
 ---
 
@@ -129,19 +124,19 @@ templates/config.yaml    # 新增 scheduler, budget 配置段
 ### 核心交付物
 
 ```
-scripts/runtime/
-├── model_bus.py       # 多模型编排总线
-├── policy_engine.py   # 策略引擎
-└── telemetry.py       # 可观测性/遥测
+历史 runtime 模块集（阶段性命名）
+├── model_bus          # 多模型编排总线（历史模块名）
+├── policy_engine      # 策略引擎（历史模块名）
+└── telemetry          # 可观测性/遥测（历史模块名）
 
-scripts/
-├── fusion-explain.sh  # /fusion explain (解释决策)
-└── fusion-doctor.sh   # /fusion doctor (诊断问题)
+历史命令目标
+├── explain 入口       # /fusion explain（历史目标）
+└── doctor 入口        # /fusion doctor（历史目标）
 
-docs/
-├── MODEL_BUS.md
-├── OPERATIONS_RUNBOOK.md
-└── UPGRADE_v2_to_v3.md
+维护文档
+├── 模型总线文档（历史计划名）
+├── 运维手册（历史计划名）
+└── v2→v3 升级指南（历史计划名）
 ```
 
 ### 最小可验收能力
@@ -162,7 +157,7 @@ docs/
 ### 风险与缓解
 | 风险 | 缓解措施 |
 |------|----------|
-| 模型编排复杂度上升 | `model_bus.mode=shadow` 先旁路观测 |
+| 模型编排复杂度上升 | 先以影子模式旁路观测 |
 | 策略漂移 | 保留单模型硬回退 |
 
 ---
@@ -172,7 +167,7 @@ docs/
 ### 原则
 1. **增量交付** - 每阶段发可用版本
 2. **向后兼容** - 全程保留 `compat_mode` 与串行回退
-3. **灰度发布** - 新能力先 `shadow/canary`，指标达标再默认开启
+3. **灰度发布** - 新能力先旁路/小流量观察，指标达标再默认开启
 
 ### 版本兼容矩阵
 | 用户版本 | v2.1.0 | v2.5.0 | v3.0.0 |
@@ -195,9 +190,9 @@ docs/
 - ✅ Hook Runtime 模块路径断层修复（外部 cwd 可用）
 - ✅ UNDERSTAND 阶段最小执行器落地并接入 `fusion-start.sh`
 - ✅ `codeagent-wrapper` 桥接脚本落地（主后端+回退+会话持久化）
-- ✅ `create_kernel()` 自动读取 `scheduler/budget/backend` 配置接线
+- ✅ 启动接线自动读取 `scheduler/budget/backend` 配置
 - ✅ `fusion-status.sh` 增加 runtime/scheduler 可观测摘要
-- ✅ 全量测试 283/283 通过
+- ✅ 当时全量测试记录通过
 
 ---
 

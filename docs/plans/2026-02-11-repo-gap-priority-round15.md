@@ -6,19 +6,19 @@
 
 **Architecture:** 严格 `RED -> GREEN -> REFACTOR`。先补 3 个失败测试（lock 竞争、stop-guard 契约、README 新鲜度），再修复脚本和文档，最后做 targeted + full 回归。
 
-**Tech Stack:** Bash, Python `pytest`, Markdown。
+**Tech Stack:** Bash, Markdown。
 
 ---
 
 ### Task 1: R15-001 stop-guard 锁竞争 structured 阻断
 
 **Files:**
-- Create: `scripts/runtime/tests/test_fusion_stop_guard_script.py`
+- Create: `scripts/runtime/tests/test_fusion_stop_guard_script`
 - Modify: `scripts/fusion-stop-guard.sh`
 
 **Step 1: RED**
 - 新增 `test_structured_lock_contention_returns_json_block`。
-- Run: `pytest -q scripts/runtime/tests/test_fusion_stop_guard_script.py::TestFusionStopGuardScript::test_structured_lock_contention_returns_json_block`
+- 测试记录： `scripts/runtime/tests/test_fusion_stop_guard_script::TestFusionStopGuardScript::test_structured_lock_contention_returns_json_block`
 - Expected: FAIL（当前 lock 竞争返回 rc=2 且无 JSON）。
 
 **Step 2: GREEN**
@@ -32,7 +32,7 @@
 ### Task 2: R15-002 stop-guard 专项脚本测试集
 
 **Files:**
-- Create: `scripts/runtime/tests/test_fusion_stop_guard_script.py`
+- Create: `scripts/runtime/tests/test_fusion_stop_guard_script`
 
 **Step 1: RED**
 - 新增 stop-guard 合同测试：
@@ -40,7 +40,7 @@
   - legacy pending 阻断 exit2
   - 非 in_progress 放行
   - 无 `.fusion` 放行
-- Run: `pytest -q scripts/runtime/tests/test_fusion_stop_guard_script.py`
+- 测试记录： `scripts/runtime/tests/test_fusion_stop_guard_script`
 - Expected: 至少 1 项 FAIL（lock 竞争/行为契约缺口）。
 
 **Step 2: GREEN**
@@ -54,13 +54,13 @@
 ### Task 3: R15-003 README 快速恢复路径
 
 **Files:**
-- Modify: `scripts/runtime/tests/test_docs_freshness.py`
+- Modify: `scripts/runtime/tests/test_docs_freshness`
 - Modify: `README.md`
 - Modify: `README.zh-CN.md`
 
 **Step 1: RED**
 - 增加文档新鲜度测试：README / README.zh-CN 需包含 `fusion-hook-doctor.sh --json --fix`。
-- Run: `pytest -q scripts/runtime/tests/test_docs_freshness.py::TestDocsFreshness::test_readme_mentions_hook_doctor_fix scripts/runtime/tests/test_docs_freshness.py::TestDocsFreshness::test_readme_zh_cn_mentions_hook_doctor_fix`
+- 测试记录： `scripts/runtime/tests/test_docs_freshness::TestDocsFreshness::test_readme_mentions_hook_doctor_fix scripts/runtime/tests/test_docs_freshness::TestDocsFreshness::test_readme_zh_cn_mentions_hook_doctor_fix`
 - Expected: FAIL（当前未明确给出该命令）。
 
 **Step 2: GREEN**
@@ -75,6 +75,9 @@
 
 Run:
 - `bash -n scripts/fusion-stop-guard.sh`
-- `pytest -q scripts/runtime/tests/test_fusion_stop_guard_script.py scripts/runtime/tests/test_docs_freshness.py`
-- `pytest -q scripts/runtime/tests/test_fusion_status_script.py scripts/runtime/tests/test_fusion_achievements_script.py scripts/runtime/tests/test_fusion_control_script_validation.py scripts/runtime/tests/test_fusion_codeagent_script.py scripts/runtime/tests/test_fusion_hook_doctor_script.py scripts/runtime/tests/test_fusion_start_script.py scripts/runtime/tests/test_loop_guardian_script.py scripts/runtime/tests/test_fusion_stop_guard_script.py scripts/runtime/tests/test_docs_freshness.py`
-- `pytest -q`
+- 测试记录： `scripts/runtime/tests/test_fusion_stop_guard_script scripts/runtime/tests/test_docs_freshness`
+- 测试记录： `scripts/runtime/tests/test_fusion_status_script scripts/runtime/tests/test_fusion_achievements_script scripts/runtime/tests/test_fusion_control_script_validation scripts/runtime/tests/test_fusion_codeagent_script scripts/runtime/tests/test_fusion_hook_doctor_script scripts/runtime/tests/test_fusion_start_script scripts/runtime/tests/test_loop_guardian_script scripts/runtime/tests/test_fusion_stop_guard_script scripts/runtime/tests/test_docs_freshness`
+- 全量验证记录
+
+> 归档说明：本文保留其历史上下文。当前行为请以 Rust 与 Shell 契约为准。
+

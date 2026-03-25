@@ -51,9 +51,9 @@ You are implementing a task following strict TDD (Test-Driven Development).
 
 Detect project test command:
 - `package.json` with test script → `npm test`
-- `pytest.ini` or `tests/` with `.py` → `pytest`
+- `deno.json` → `deno test`
 - `go.mod` → `go test ./...`
-- `Cargo.toml` → `cargo test`
+- `Cargo.toml` → `cargo test --release`
 - Default → ask user
 
 ## Now execute TDD for:

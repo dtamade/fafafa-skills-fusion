@@ -4,9 +4,9 @@
 
 **Goal:** 修复 `fusion-start.sh` 的 usage 输出重定向误解析问题，并通过测试固化 help/错误路径行为。
 
-**Architecture:** 采用 RED→GREEN→REFACTOR：先在 `test_fusion_start_script.py` 增加失败测试覆盖 `--help`、未知参数、无参数路径，再最小修改 usage 输出字符串，最后回归验证。
+**Architecture:** 采用 RED→GREEN→REFACTOR：先在 `test_fusion_start_script` 增加失败测试覆盖 `--help`、未知参数、无参数路径，再最小修改 usage 输出字符串，最后回归验证。
 
-**Tech Stack:** Bash, Python (pytest), Markdown。
+**Tech Stack:** Bash, Markdown。
 
 ---
 
@@ -14,7 +14,7 @@
 
 **Priority:** P0  
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_start_script.py`
+- Modify: `scripts/runtime/tests/test_fusion_start_script`
 - Modify: `scripts/fusion-start.sh`
 
 **Step 1: Write the failing test**
@@ -23,7 +23,7 @@
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_start_script.py::TestFusionStartScript::test_help_exits_zero_and_shows_usage`
+测试记录： `scripts/runtime/tests/test_fusion_start_script::TestFusionStartScript::test_help_exits_zero_and_shows_usage`
 Expected: FAIL（当前 exit 1 且出现 `goal: No such file or directory`）。
 
 **Step 3: Write minimal implementation**
@@ -32,7 +32,7 @@ Expected: FAIL（当前 exit 1 且出现 `goal: No such file or directory`）。
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_start_script.py::TestFusionStartScript::test_help_exits_zero_and_shows_usage`
+测试记录： `scripts/runtime/tests/test_fusion_start_script::TestFusionStartScript::test_help_exits_zero_and_shows_usage`
 Expected: PASS。
 
 ---
@@ -41,7 +41,7 @@ Expected: PASS。
 
 **Priority:** P0  
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_start_script.py`
+- Modify: `scripts/runtime/tests/test_fusion_start_script`
 - Modify: `scripts/fusion-start.sh`
 
 **Step 1: Write the failing test**
@@ -50,7 +50,7 @@ Expected: PASS。
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_start_script.py::TestFusionStartScript::test_unknown_option_reports_usage_without_shell_redirection_error`
+测试记录： `scripts/runtime/tests/test_fusion_start_script::TestFusionStartScript::test_unknown_option_reports_usage_without_shell_redirection_error`
 Expected: FAIL。
 
 **Step 3: Write minimal implementation**
@@ -59,7 +59,7 @@ Expected: FAIL。
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_start_script.py::TestFusionStartScript::test_unknown_option_reports_usage_without_shell_redirection_error`
+测试记录： `scripts/runtime/tests/test_fusion_start_script::TestFusionStartScript::test_unknown_option_reports_usage_without_shell_redirection_error`
 Expected: PASS。
 
 ---
@@ -68,7 +68,7 @@ Expected: PASS。
 
 **Priority:** P1  
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_start_script.py`
+- Modify: `scripts/runtime/tests/test_fusion_start_script`
 - Modify: `scripts/fusion-start.sh`
 
 **Step 1: Write the failing test**
@@ -77,7 +77,7 @@ Expected: PASS。
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_start_script.py::TestFusionStartScript::test_missing_goal_reports_usage_without_shell_redirection_error`
+测试记录： `scripts/runtime/tests/test_fusion_start_script::TestFusionStartScript::test_missing_goal_reports_usage_without_shell_redirection_error`
 Expected: FAIL。
 
 **Step 3: Write minimal implementation**
@@ -86,7 +86,7 @@ Expected: FAIL。
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_start_script.py::TestFusionStartScript::test_missing_goal_reports_usage_without_shell_redirection_error`
+测试记录： `scripts/runtime/tests/test_fusion_start_script::TestFusionStartScript::test_missing_goal_reports_usage_without_shell_redirection_error`
 Expected: PASS。
 
 ---
@@ -94,5 +94,8 @@ Expected: PASS。
 ## Final Regression (Round 6)
 
 Run:
-- `pytest -q scripts/runtime/tests/test_fusion_start_script.py scripts/runtime/tests/test_loop_guardian_script.py scripts/runtime/tests/test_fusion_control_script_validation.py scripts/runtime/tests/test_docs_freshness.py scripts/runtime/tests/test_fusion_hook_doctor_script.py scripts/runtime/tests/test_fusion_status_script.py`
-- `pytest -q`
+- 测试记录： `scripts/runtime/tests/test_fusion_start_script scripts/runtime/tests/test_loop_guardian_script scripts/runtime/tests/test_fusion_control_script_validation scripts/runtime/tests/test_docs_freshness scripts/runtime/tests/test_fusion_hook_doctor_script scripts/runtime/tests/test_fusion_status_script`
+- 全量验证记录
+
+> 归档说明：本文保留其历史上下文。当前行为请以 Rust 与 Shell 契约为准。
+

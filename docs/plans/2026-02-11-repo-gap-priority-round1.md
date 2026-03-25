@@ -6,7 +6,7 @@
 
 **Architecture:** 采用“测试先行”的增量策略：每个缺口先用失败测试锁定期望行为，再做最小实现，最后跑目标测试与全量回归。脚本改动保持向后兼容，新增行为通过可选参数或环境变量触发。
 
-**Tech Stack:** Bash, Python (pytest), Markdown docs。
+**Tech Stack:** Bash, Markdown docs。
 
 ---
 
@@ -14,7 +14,7 @@
 
 **Priority:** P1  
 **Files:**
-- Create: `scripts/runtime/tests/test_docs_freshness.py`
+- Create: `scripts/runtime/tests/test_docs_freshness`
 - Modify: `README.zh-CN.md`
 
 **Step 1: Write the failing test**
@@ -23,21 +23,21 @@
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_docs_freshness.py`  
+测试记录： `scripts/runtime/tests/test_docs_freshness`  
 Expected: FAIL，指出 `README.zh-CN.md` 仍包含硬编码通过数。
 
 **Step 3: Write minimal implementation**
 
-将 `README.zh-CN.md` 对应段落改为动态描述（例如“全量测试：运行 `pytest -q` 查看最新结果”），避免固定数字。
+将 `README.zh-CN.md` 对应段落改为动态描述（例如“全量测试：查看当时记录的全量测试结果”），避免固定数字。
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_docs_freshness.py`  
+测试记录： `scripts/runtime/tests/test_docs_freshness`  
 Expected: PASS。
 
 **Step 5: Regression checkpoint**
 
-Run: `pytest -q scripts/runtime/tests/test_docs_freshness.py scripts/runtime/tests/test_fusion_status_script.py`
+测试记录： `scripts/runtime/tests/test_docs_freshness scripts/runtime/tests/test_fusion_status_script`
 
 ---
 
@@ -45,7 +45,7 @@ Run: `pytest -q scripts/runtime/tests/test_docs_freshness.py scripts/runtime/tes
 
 **Priority:** P0  
 **Files:**
-- Create: `scripts/runtime/tests/test_fusion_hook_doctor_script.py`
+- Create: `scripts/runtime/tests/test_fusion_hook_doctor_script`
 - Modify: `scripts/fusion-hook-doctor.sh`
 
 **Step 1: Write the failing test**
@@ -56,7 +56,7 @@ Run: `pytest -q scripts/runtime/tests/test_docs_freshness.py scripts/runtime/tes
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_hook_doctor_script.py`  
+测试记录： `scripts/runtime/tests/test_fusion_hook_doctor_script`  
 Expected: FAIL（当前不支持 `--json`）。
 
 **Step 3: Write minimal implementation**
@@ -68,7 +68,7 @@ Expected: FAIL（当前不支持 `--json`）。
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_hook_doctor_script.py`  
+测试记录： `scripts/runtime/tests/test_fusion_hook_doctor_script`  
 Expected: PASS。
 
 **Step 5: Regression checkpoint**
@@ -81,7 +81,7 @@ Run: `bash scripts/fusion-hook-doctor.sh --json .`（人工快速检查输出结
 
 **Priority:** P1  
 **Files:**
-- Modify: `scripts/runtime/tests/test_fusion_status_script.py`
+- Modify: `scripts/runtime/tests/test_fusion_status_script`
 - Modify: `scripts/fusion-status.sh`
 
 **Step 1: Write the failing test**
@@ -90,7 +90,7 @@ Run: `bash scripts/fusion-hook-doctor.sh --json .`（人工快速检查输出结
 
 **Step 2: Run test to verify it fails**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_status_script.py::TestFusionStatusScript::test_status_can_disable_leaderboard`  
+测试记录： `scripts/runtime/tests/test_fusion_status_script::TestFusionStatusScript::test_status_can_disable_leaderboard`  
 Expected: FAIL（当前总是尝试输出排行榜）。
 
 **Step 3: Write minimal implementation**
@@ -101,14 +101,14 @@ Expected: FAIL（当前总是尝试输出排行榜）。
 
 **Step 4: Run test to verify it passes**
 
-Run: `pytest -q scripts/runtime/tests/test_fusion_status_script.py::TestFusionStatusScript::test_status_can_disable_leaderboard`  
+测试记录： `scripts/runtime/tests/test_fusion_status_script::TestFusionStatusScript::test_status_can_disable_leaderboard`  
 Expected: PASS。
 
 **Step 5: Final regression**
 
 Run:
-- `pytest -q scripts/runtime/tests/test_fusion_status_script.py scripts/runtime/tests/test_fusion_hook_doctor_script.py scripts/runtime/tests/test_docs_freshness.py`
-- `pytest -q`
+- 测试记录： `scripts/runtime/tests/test_fusion_status_script scripts/runtime/tests/test_fusion_hook_doctor_script scripts/runtime/tests/test_docs_freshness`
+- 全量验证记录
 
 ---
 
@@ -117,3 +117,5 @@ Run:
 - 本轮执行 Batch 1（Task 1~3 全部完成），每个 Task 严格走 RED → GREEN → REFACTOR。
 - 每一步回报命令与关键输出。
 - 若遇阻塞，立即停止并报告，不盲猜。
+
+> 归档说明：本文保留其历史上下文。当前行为请以 Rust 与 Shell 契约为准。
