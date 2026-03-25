@@ -5144,6 +5144,7 @@ fn hook_pretool_prints_review_gate_guidance() {
     ));
 }
 
+#[cfg(not(windows))]
 #[test]
 fn shell_pretool_fallback_prints_progress_bar_and_tdd_guidance() {
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -5208,6 +5209,7 @@ fn shell_pretool_fallback_prints_progress_bar_and_tdd_guidance() {
     ));
 }
 
+#[cfg(not(windows))]
 #[test]
 fn shell_pretool_fallback_prints_direct_execution_for_research_tasks() {
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -5259,6 +5261,7 @@ fn shell_pretool_fallback_prints_direct_execution_for_research_tasks() {
     assert!(line_contains_normalized(&stdout, "→ Direct execution"));
 }
 
+#[cfg(not(windows))]
 #[test]
 fn shell_pretool_fallback_marks_in_progress_task_and_guardian_warning() {
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -5322,6 +5325,7 @@ fn shell_pretool_fallback_marks_in_progress_task_and_guardian_warning() {
     ));
 }
 
+#[cfg(not(windows))]
 #[test]
 fn shell_pretool_fallback_prints_scheduler_and_agent_batch_summary() {
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -5392,6 +5396,7 @@ fn shell_pretool_fallback_prints_scheduler_and_agent_batch_summary() {
     ));
 }
 
+#[cfg(not(windows))]
 #[test]
 fn shell_pretool_fallback_prints_agent_handoff_summary() {
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -5463,6 +5468,7 @@ fn shell_pretool_fallback_prints_agent_handoff_summary() {
     assert!(line_contains_normalized(&stdout, "Pending reviews: task_2"));
 }
 
+#[cfg(not(windows))]
 #[test]
 fn shell_pretool_fallback_prints_review_gate_guidance() {
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -5936,6 +5942,7 @@ safe_backlog:
     assert!(line_contains_normalized(&events, "ALL_TASKS_DONE"));
 }
 
+#[cfg(not(windows))]
 #[test]
 fn shell_posttool_fallback_prints_named_completion_and_next_guidance() {
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -5983,6 +5990,7 @@ fn shell_posttool_fallback_prints_named_completion_and_next_guidance() {
     ));
 }
 
+#[cfg(not(windows))]
 #[test]
 fn shell_posttool_fallback_prints_review_gate_next_action() {
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -6033,6 +6041,7 @@ fn shell_posttool_fallback_prints_review_gate_next_action() {
     ));
 }
 
+#[cfg(not(windows))]
 #[test]
 fn shell_posttool_fallback_completed_tasks_report_verify_next_action() {
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -6292,6 +6301,7 @@ fn hook_stop_guard_without_tasks_surfaces_decompose_next_action() {
     ));
 }
 
+#[cfg(not(windows))]
 #[test]
 fn shell_stop_guard_fallback_blocks_when_pending_tasks_exist() {
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -6347,6 +6357,7 @@ fn shell_stop_guard_fallback_blocks_when_pending_tasks_exist() {
     ));
 }
 
+#[cfg(not(windows))]
 #[test]
 fn shell_stop_guard_fallback_review_gate_requires_reviewer_approval() {
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -6413,6 +6424,7 @@ fn shell_stop_guard_fallback_review_gate_requires_reviewer_approval() {
     ));
 }
 
+#[cfg(not(windows))]
 #[test]
 fn shell_stop_guard_fallback_without_tasks_surfaces_decompose_next_action() {
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))

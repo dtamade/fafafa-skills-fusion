@@ -157,6 +157,14 @@ fn ci_cross_platform_smoke_script_help_and_end_to_end() {
     ));
     assert!(line_contains_normalized(
         &output,
+        "[ci-cross-platform-smoke] running fallback hook shell smoke"
+    ));
+    assert!(line_contains_normalized(
+        &output,
+        "[ci-cross-platform-smoke] fallback hook shell smoke passed"
+    ));
+    assert!(line_contains_normalized(
+        &output,
         "[ci-cross-platform-smoke] shell smoke passed"
     ));
     let summary_path = artifacts.path().join("cross-platform-smoke-summary.json");

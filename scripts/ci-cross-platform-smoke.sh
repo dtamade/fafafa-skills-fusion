@@ -218,4 +218,51 @@ if [[ -n "$catchup_output" ]]; then
 fi
 COMPLETED_COMMANDS+=("${COMMANDS[4]}")
 
+log "running fallback hook shell smoke"
+cat > "$PROJECT_ROOT/.fusion/sessions.json" <<'EOF'
+{
+  "status": "in_progress",
+  "current_phase": "EXECUTE",
+  "goal": "cross-platform fallback shell smoke"
+}
+EOF
+cat > "$PROJECT_ROOT/.fusion/task_plan.md" <<'EOF'
+### Task 1: A [COMPLETED]
+### Task 2: B [PENDING]
+- Type: implementation
+EOF
+cat > "$PROJECT_ROOT/.fusion/loop_context.json" <<'EOF'
+{
+  "no_progress_rounds": 4,
+  "same_action_count": 0
+}
+EOF
+
+pretool_output="$(
+    cd "$PROJECT_ROOT" &&
+    printf '{}\n' | FUSION_BRIDGE_DISABLE=1 bash "$SCRIPT_DIR/fusion-pretool.sh" 2>&1
+)"
+assert_contains "$pretool_output" "[fusion] Goal:" "fusion-pretool.sh fallback output"
+assert_contains "$pretool_output" "Task 2/2: B [PENDING] (type: implementation)" "fusion-pretool.sh fallback output"
+assert_contains "$pretool_output" "TDD flow: RED → GREEN → REFACTOR" "fusion-pretool.sh fallback output"
+
+printf '0:2:0:0\n' > "$PROJECT_ROOT/.fusion/.progress_snapshot"
+posttool_output="$(
+    cd "$PROJECT_ROOT" &&
+    printf '{}\n' | FUSION_BRIDGE_DISABLE=1 bash "$SCRIPT_DIR/fusion-posttool.sh" 2>&1
+)"
+assert_contains "$posttool_output" "Task A → COMPLETED" "fusion-posttool.sh fallback output"
+assert_contains "$posttool_output" "Next action: Continue task: B [PENDING] | Mode: TDD" "fusion-posttool.sh fallback output"
+
+cat > "$PROJECT_ROOT/.fusion/task_plan.md" <<'EOF'
+### Task 1: A [PENDING]
+EOF
+stop_guard_output="$(
+    cd "$PROJECT_ROOT" &&
+    printf '{}\n' | FUSION_BRIDGE_DISABLE=1 bash "$SCRIPT_DIR/fusion-stop-guard.sh" 2>&1
+)"
+assert_contains "$stop_guard_output" '"decision":"block"' "fusion-stop-guard.sh fallback output"
+assert_contains "$stop_guard_output" 'Continue task: A [PENDING]' "fusion-stop-guard.sh fallback output"
+log "fallback hook shell smoke passed"
+
 log "shell smoke passed"
