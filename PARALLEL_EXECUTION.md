@@ -2,6 +2,9 @@
 
 Fusion 支持并行执行独立任务以提高效率。
 
+> 当前活口径：真正的多代理并行执行应以 `docs/MULTI_AGENT_EXECUTION_ROADMAP.md` 为准。
+> 当前仓库已经具备 batch 选择、`single_orchestrator` 与 `role_handoff` 的 agent spine，但 `fusion-bridge codeagent` 仍是一次选择一个 active task 执行；如果这里的表述与当前活文档冲突，请以 `README.md`、`README.zh-CN.md`、`docs/CLI_CONTRACT_MATRIX.md` 和 `docs/MULTI_AGENT_EXECUTION_ROADMAP.md` 为准。
+
 ---
 
 ## 并行策略

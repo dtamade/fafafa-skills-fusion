@@ -304,6 +304,7 @@ tail -n 50 .fusion/hook-debug.log
 - [`docs/E2E_EXAMPLE.md`](docs/E2E_EXAMPLE.md): end-to-end workflow sample
 - [`.claude/settings.example.json`](.claude/settings.example.json): checked-in hook template; copy it to your host-local `.claude/settings.json`
 - [`docs/V3_GA_EXECUTION_ROADMAP.md`](docs/V3_GA_EXECUTION_ROADMAP.md): current v3 GA execution roadmap
+- [`docs/MULTI_AGENT_EXECUTION_ROADMAP.md`](docs/MULTI_AGENT_EXECUTION_ROADMAP.md): post-GA multi-agent execution roadmap
 - [`rust/README.md`](rust/README.md): Rust bridge current usage
 - [`docs/RUST_FUSION_BRIDGE_ROADMAP.md`](docs/RUST_FUSION_BRIDGE_ROADMAP.md): historical Rust binary migration roadmap
 

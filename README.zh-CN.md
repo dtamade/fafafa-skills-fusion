@@ -88,6 +88,7 @@ UNDERSTAND → INITIALIZE → ANALYZE → DECOMPOSE → EXECUTE → VERIFY → R
 | [docs/E2E_EXAMPLE.md](docs/E2E_EXAMPLE.md)                               | 端到端执行示例                                                     |
 | [`.claude/settings.example.json`](.claude/settings.example.json)         | 受版本控制的 Hook 模板；复制后生成宿主本地 `.claude/settings.json` |
 | [docs/V3_GA_EXECUTION_ROADMAP.md](docs/V3_GA_EXECUTION_ROADMAP.md)       | 当前 v3 GA 执行路线图                                              |
+| [docs/MULTI_AGENT_EXECUTION_ROADMAP.md](docs/MULTI_AGENT_EXECUTION_ROADMAP.md) | post-GA 多代理执行路线图                                        |
 | [rust/README.md](rust/README.md)                                         | Rust Bridge 当前使用说明                                           |
 | [docs/RUST_FUSION_BRIDGE_ROADMAP.md](docs/RUST_FUSION_BRIDGE_ROADMAP.md) | 历史 Rust 二进制迁移路线图                                         |
 

@@ -30,6 +30,8 @@ The current GA batch must **not** expand scope in historical directions that are
 - do not re-open multi-engine runtime design as a live path
 - do not rewrite historical roadmap documents into live truth sources
 
+Post-GA multi-agent maturation is tracked separately in `docs/MULTI_AGENT_EXECUTION_ROADMAP.md` and is not a GA release blocker.
+
 ## Source of truth order
 
 Use these sources in order when deciding current behavior:

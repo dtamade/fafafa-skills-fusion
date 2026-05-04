@@ -474,6 +474,7 @@ fn active_surface_stays_free_of_retired_tooling_words() {
         "docs/COMPATIBILITY.md",
         "docs/E2E_EXAMPLE.md",
         "docs/HOOKS_SETUP.md",
+        "docs/MULTI_AGENT_EXECUTION_ROADMAP.md",
         "docs/REPO_CONVERGENCE_SUMMARY_2026-03.md",
         "docs/REPO_HYGIENE.md",
         "docs/RUNTIME_KERNEL_DESIGN.md",
@@ -521,6 +522,7 @@ fn active_docs_and_templates_use_rust_only_validation() {
         "docs/UPGRADE_v2_COMPAT.md",
         "docs/CLI_CONTRACT_MATRIX.md",
         "docs/COMPATIBILITY.md",
+        "docs/MULTI_AGENT_EXECUTION_ROADMAP.md",
         "SESSION_RECOVERY.md",
         "EXECUTION_PROTOCOL.md",
         "docs/RUNTIME_KERNEL_DESIGN.md",
@@ -682,11 +684,24 @@ fn active_docs_and_templates_use_rust_only_validation() {
     ));
     assert!(contains_normalized(
         &readme,
+        "[`docs/MULTI_AGENT_EXECUTION_ROADMAP.md`](docs/MULTI_AGENT_EXECUTION_ROADMAP.md)"
+    ));
+    assert!(contains_normalized(
+        &readme,
         "current v3 GA execution roadmap"
+    ));
+    assert!(contains_normalized(
+        &readme,
+        "post-GA multi-agent execution roadmap"
     ));
     assert!(appears_before_normalized(
         &readme,
         "[`docs/V3_GA_EXECUTION_ROADMAP.md`](docs/V3_GA_EXECUTION_ROADMAP.md)",
+        "[`docs/MULTI_AGENT_EXECUTION_ROADMAP.md`](docs/MULTI_AGENT_EXECUTION_ROADMAP.md)"
+    ));
+    assert!(appears_before_normalized(
+        &readme,
+        "[`docs/MULTI_AGENT_EXECUTION_ROADMAP.md`](docs/MULTI_AGENT_EXECUTION_ROADMAP.md)",
         "[`docs/RUST_FUSION_BRIDGE_ROADMAP.md`](docs/RUST_FUSION_BRIDGE_ROADMAP.md)"
     ));
     assert!(contains_normalized(
@@ -782,10 +797,20 @@ fn active_docs_and_templates_use_rust_only_validation() {
         &readme_zh,
         "[docs/V3_GA_EXECUTION_ROADMAP.md](docs/V3_GA_EXECUTION_ROADMAP.md)"
     ));
+    assert!(contains_normalized(
+        &readme_zh,
+        "[docs/MULTI_AGENT_EXECUTION_ROADMAP.md](docs/MULTI_AGENT_EXECUTION_ROADMAP.md)"
+    ));
     assert!(contains_normalized(&readme_zh, "当前 v3 GA 执行路线图"));
+    assert!(contains_normalized(&readme_zh, "post-GA 多代理执行路线图"));
     assert!(appears_before_normalized(
         &readme_zh,
         "[docs/V3_GA_EXECUTION_ROADMAP.md](docs/V3_GA_EXECUTION_ROADMAP.md)",
+        "[docs/MULTI_AGENT_EXECUTION_ROADMAP.md](docs/MULTI_AGENT_EXECUTION_ROADMAP.md)"
+    ));
+    assert!(appears_before_normalized(
+        &readme_zh,
+        "[docs/MULTI_AGENT_EXECUTION_ROADMAP.md](docs/MULTI_AGENT_EXECUTION_ROADMAP.md)",
         "[docs/RUST_FUSION_BRIDGE_ROADMAP.md](docs/RUST_FUSION_BRIDGE_ROADMAP.md)"
     ));
     assert!(contains_normalized(
@@ -937,6 +962,18 @@ fn active_docs_and_templates_use_rust_only_validation() {
     ));
     assert!(contains_normalized(
         &parallel_doc,
+        "`docs/MULTI_AGENT_EXECUTION_ROADMAP.md`"
+    ));
+    assert!(contains_normalized(
+        &parallel_doc,
+        "`single_orchestrator` 与 `role_handoff`"
+    ));
+    assert!(contains_normalized(
+        &parallel_doc,
+        "`fusion-bridge codeagent` 仍是一次选择一个 active task 执行"
+    ));
+    assert!(contains_normalized(
+        &parallel_doc,
         "### `.fusion/config.yaml`"
     ));
     assert!(contains_normalized(
@@ -954,6 +991,27 @@ fn active_docs_and_templates_use_rust_only_validation() {
     assert!(!contains_normalized(
         &parallel_doc,
         "由 `config.yaml` 中的 `parallel` 配置控制（默认 2）"
+    ));
+
+    let multi_agent_roadmap = read("docs/MULTI_AGENT_EXECUTION_ROADMAP.md");
+    assert!(contains_normalized(
+        &multi_agent_roadmap,
+        "post-GA execution source of truth"
+    ));
+    assert!(contains_normalized(
+        &multi_agent_roadmap,
+        "not a v3.0 GA blocker"
+    ));
+    assert!(contains_normalized(&multi_agent_roadmap, "`single_runner`"));
+    assert!(contains_normalized(&multi_agent_roadmap, "`role_handoff`"));
+    assert!(contains_normalized(&multi_agent_roadmap, "`parallel_workers`"));
+    assert!(contains_normalized(
+        &multi_agent_roadmap,
+        "shared-workspace parallel editing is not a supported end state"
+    ));
+    assert!(contains_normalized(
+        &multi_agent_roadmap,
+        "Every advanced mode must preserve a hard fallback to the single-runner path"
     ));
 
     let hooks = read("docs/HOOKS_SETUP.md");
@@ -1410,6 +1468,10 @@ fn active_docs_and_templates_use_rust_only_validation() {
     assert!(contains_normalized(
         &ga_roadmap,
         "do not add `/fusion explain` or dual-model collaboration to the current GA batch"
+    ));
+    assert!(contains_normalized(
+        &ga_roadmap,
+        "`docs/MULTI_AGENT_EXECUTION_ROADMAP.md`"
     ));
     assert!(contains_normalized(
         &ga_roadmap,
